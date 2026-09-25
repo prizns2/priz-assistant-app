@@ -251,6 +251,30 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     <div id="sos-pv"></div>
   </section>
 
+  <!-- АНАЛИТИКА -->
+  <section class="screen" id="s-an" hidden>
+    <button class="back" data-go="home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Главная
+    </button>
+    <h1 class="h1">Аналитика директору</h1>
+    <div>
+      <div class="label">Сеть</div>
+      <div class="seg two" role="group" aria-label="Сеть" id="an-net">
+        <button aria-pressed="true" data-n="ft">ФТ <em class="cnt">11 регионов</em></button>
+        <button aria-pressed="false" data-n="r">Рулька <em class="cnt">2 региона</em></button>
+      </div>
+    </div>
+    <div>
+      <div class="label">Месяц</div>
+      <div class="regions" id="an-months"></div>
+    </div>
+    <div>
+      <div class="label">Регион</div>
+      <div class="regions" id="an-regions"></div>
+    </div>
+    <div id="an-pv"></div>
+  </section>
+
   <!-- РАССЫЛКА -->
   <section class="screen" id="s-send" hidden>
     <h1 class="h1">Рассылка</h1>
@@ -307,9 +331,10 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
   const state = { sums: {}, period: DEFAULT_PERIOD, net: 'ft', region: 'all', batch: null, sosBatch: null, history: [], loading: {}, building: false,
-                  sos: { period: 'mm', from: '', to: '', region: 'all', sums: {}, loading: false } };
-  // Каждый ответ сервера несёт обе пачки и историю
-  const applyState = d => { state.batch = d.batch || null; state.sosBatch = d.sosBatch || null; state.history = d.history || []; };
+                  sos: { period: 'mm', from: '', to: '', region: 'all', sums: {}, loading: false },
+                  an: { net: 'ft', month: '', region: 'all', sums: {}, loading: false }, anBatch: null };
+  // Каждый ответ сервера несёт все пачки и историю
+  const applyState = d => { state.batch = d.batch || null; state.sosBatch = d.sosBatch || null; state.anBatch = d.anBatch || null; state.history = d.history || []; };
 
   /* ---------- API ---------- */
   async function api(action, body) {
@@ -338,7 +363,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       const sums = {};
       Object.keys(state.sums).forEach(k => { if (state.sums[k] && state.sums[k].regions) sums[k] = state.sums[k]; });
       const sos = state.sos.sums.mm && state.sos.sums.mm.regions ? {mm: state.sos.sums.mm} : {};
-      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, sos, batch: state.batch, sosBatch: state.sosBatch, history: state.history}));
+      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, sos, batch: state.batch, sosBatch: state.sosBatch, anBatch: state.anBatch, history: state.history}));
     } catch (e) {}
   }
   function restoreLocal() {
@@ -422,7 +447,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="mod" data-go="sos">' + (sosLeft() ? '<span class="badge num">' + sosLeft() + '</span>' : '') +
           '<span class="ic" style="color:var(--ember)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></span>' +
           '<span><b>Камеры SOS</b><small>Рульки · ПН → ПН</small></span></button>' +
-        soonMod('Аналитика директору', 'ФТ · Рулька · месяц', 'var(--ok)', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>') +
+        '<button class="mod" data-go="an"><span class="ic" style="color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>' +
+          '<span><b>Аналитика директору</b><small>ФТ · Рулька · месяц · Word</small></span></button>' +
         soonMod('Отображение дат', 'Диапазон дат', 'var(--warn)', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>') +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
@@ -528,6 +554,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   $('#cta').addEventListener('click', async () => {
     if (current === 'sos') return buildSos();
+    if (current === 'an') return buildAn();
     if (state.building) return;
     state.building = true; $('#cta').disabled = true;
     const s = state.sums[state.period];
@@ -655,34 +682,120 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
   }
 
+  /* ---------- АНАЛИТИКА ---------- */
+  const A = state.an;
+  const UA_MONTHS = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+  // Последние 12 месяцев, по умолчанию — прошлый (аналитику сдают за закрытый месяц)
+  const AN_MONTH_LIST = Array.from({length: 12}, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); });
+  A.month = AN_MONTH_LIST[1];
+  const monthLabel = ym => UA_MONTHS[+ym.slice(5) - 1] + ' ' + ym.slice(0, 4);
+  const anKey = () => A.net + ':' + A.month;
+
+  async function loadAn(fresh) {
+    const key = anKey();
+    A.loading = true; renderAn();
+    try {
+      const d = await api('anSummary', {net: A.net, month: A.month, fresh: !!fresh});
+      A.sums[key] = d.summary; applyState(d); saveLocal();
+    } catch (e) {
+      if (A.sums[key] && A.sums[key].regions) toast('Не удалось обновить: ' + e.message);
+      else A.sums[key] = {error: e.message};
+    } finally {
+      A.loading = false; renderAll();
+    }
+  }
+
+  function renderAn() {
+    document.querySelectorAll('#an-net button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === A.net));
+    $('#an-months').innerHTML = AN_MONTH_LIST.map((m, i) => '<button class="reg" data-m="' + m + '" aria-pressed="' + (A.month === m) + '">' + monthLabel(m) + (i === 0 ? ' <em>идёт</em>' : '') + '</button>').join('');
+    const s = A.sums[anKey()];
+    if (!s || (A.loading && !s.regions)) {
+      $('#an-regions').innerHTML = Array.from({length: A.net === 'ft' ? 11 : 2}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
+      $('#an-pv').innerHTML = '<div class="skel" style="height:220px"></div><div class="note" style="margin-top:10px">Читаю листы «Категория 1», «Категория 2»' + (A.net === 'ft' ? ' и «Оценка»' : '') + '… до минуты</div>';
+      if (current === 'an') $('#cta').disabled = true;
+      return;
+    }
+    if (s.error) { $('#an-regions').innerHTML = ''; $('#an-pv').innerHTML = errCard(s.error, 'an'); if (current === 'an') $('#cta').disabled = true; return; }
+
+    if (A.region !== 'all' && !s.regions.some(r => r.key === A.region)) A.region = 'all';
+    const v = r => r.error ? 0 : r.cat1 + r.cat2;
+    $('#an-regions').innerHTML =
+      '<button class="reg" data-r="all" aria-pressed="' + (A.region === 'all') + '">' + (A.net === 'ft' ? 'Все ФТ' : 'Обе Рульки') + ' <em class="num">' + s.regions.reduce((n, r) => n + v(r), 0) + '</em></button>' +
+      s.regions.map(r => '<button class="reg' + (r.error ? ' err' : '') + '" data-r="' + r.key + '" aria-pressed="' + (A.region === r.key) + '">' + esc(r.name) + ' <em class="num">' + (r.error ? '!' : v(r)) + '</em></button>').join('');
+
+    const list = A.region === 'all' ? s.regions : s.regions.filter(r => r.key === A.region);
+    const ok = list.filter(r => !r.error), errs = list.filter(r => r.error);
+    const t = ok.reduce((a, r) => { ['cat1', 'cat2', 'rating', 'buyerDamage', 'buyerPaid', 'shopDamage', 'shopPaid'].forEach(k => a[k] += r[k]); return a; },
+      {cat1: 0, cat2: 0, rating: 0, buyerDamage: 0, buyerPaid: 0, shopDamage: 0, shopPaid: 0});
+    const line = (k, val) => '<div class="pv-row"><span class="tt">' + k + '</span><span class="sum num">' + val + '</span></div>';
+    $('#an-pv').innerHTML =
+      (errs.length ? '<div class="warnbox" style="margin-bottom:12px">' + errs.map(r => esc(r.name) + ': ' + esc(r.error)).join('<br>') + '</div>' : '') +
+      '<div class="preview"><div class="pv-top"><b>' + esc(A.region === 'all' ? (A.net === 'ft' ? 'Все ФТ' : 'Обе Рульки') : list[0].name) + ' · ' + esc(s.label) + '</b><span class="num">' + (t.cat1 + t.cat2) + ' ' + plural(t.cat1 + t.cat2, 'нарушение', 'нарушения', 'нарушений') + '</span></div>' +
+        line('1 категория', t.cat1) + line('2 категория', t.cat2) + (A.net === 'ft' ? line('Оценок продавцов', t.rating) : '') +
+        line('Шкода покупцям', money(t.buyerDamage) + ' ₴') + line('Відшкодовано покупцям', money(t.buyerPaid) + ' ₴') +
+        line('Шкода магазинам', money(t.shopDamage) + ' ₴') + line('Відшкодовано магазинам', money(t.shopPaid) + ' ₴') +
+      '</div><div class="note" style="margin-top:10px">Посчитано в ' + esc(s.updatedAt || '') + '. В Word попадёт текст для директора' + (A.region === 'all' ? ' по всем регионам' : '') + '.</div>';
+
+    if (current === 'an' && !state.building) {
+      $('#cta').disabled = errs.length > 0;
+      $('#cta-txt').textContent = errs.length ? 'Есть ошибки в таблицах' : 'Сформировать Word';
+    }
+  }
+
+  $('#an-net').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; A.net = b.dataset.n; A.region = 'all'; haptic(); A.sums[anKey()] ? renderAn() : loadAn(); });
+  $('#an-months').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; A.month = b.dataset.m; A.region = 'all'; haptic(); A.sums[anKey()] ? renderAn() : loadAn(); });
+  $('#an-regions').addEventListener('click', e => { const b = e.target.closest('.reg'); if (!b) return; A.region = b.dataset.r; haptic(); renderAn(); });
+
+  async function buildAn() {
+    if (state.building) return;
+    state.building = true; $('#cta').disabled = true;
+    const est = (A.net === 'ft' ? 40 : 10) * 1000, t0 = Date.now();
+    $('#cta-txt').textContent = 'Считаю и собираю Word…';
+    const iv = setInterval(() => { $('#prog').style.width = Math.min(92, (Date.now() - t0) / est * 92) + '%'; }, 300);
+    try {
+      const d = await api('anBuild', {net: A.net, month: A.month, region: A.region});
+      applyState(d); saveLocal();
+      $('#prog').style.width = '100%'; haptic('ok');
+      toast('Готово. Документ пришёл в чат с ботом');
+      setTimeout(() => go('send'), 400);
+    } catch (e) {
+      haptic('err'); toast(e.message);
+    } finally {
+      clearInterval(iv); state.building = false;
+      setTimeout(() => { $('#prog').style.width = '0'; renderAn(); }, 500);
+    }
+  }
+
   /* ---------- РАССЫЛКА ---------- */
   function renderSend() {
-    const blocks = [['checks', state.batch], ['sos', state.sosBatch]].filter(([, b]) => b && Object.keys(b.items).length);
+    const blocks = [['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
     const left = blocks.reduce((n, [, b]) => n + Object.values(b.items).filter(i => i.preparedId && !i.sent).length, 0);
     $('#pip').hidden = !left; $('#pip').textContent = left;
 
     if (!blocks.length) {
-      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в модуле чеков или Камер SOS.</div></div>' +
-        '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn2" data-go="checks">Открыть чеки</button><button class="btn2" data-go="sos">Камеры SOS</button></div>';
+      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в любом модуле.</div></div>' +
+        '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn2" data-go="checks">Открыть чеки</button><button class="btn2" data-go="sos">Камеры SOS</button><button class="btn2" data-go="an">Аналитика</button></div>';
       return;
     }
     const now = Date.now() / 1000, C = 251.3;
     const item = (kind, i) => {
-      const sos = kind === 'sos';
-      let cls = '', btn, meta = '<small class="num">' + (sos ? i.count + ' ' + plural(i.count, 'запись', 'записи', 'записей') : i.count + ' стр. · ' + money(i.sum) + ' ₴') + '</small>';
+      const what = kind === 'sos' ? i.count + ' ' + plural(i.count, 'запись', 'записи', 'записей')
+        : kind === 'an' ? i.count + ' ' + plural(i.count, 'нарушение', 'нарушения', 'нарушений')
+        : i.count + ' стр. · ' + money(i.sum) + ' ₴';
+      let cls = '', btn, meta = '<small class="num">' + what + '</small>';
       const send = '<button class="send" data-kind="' + kind + '" data-send="' + i.key + '">Отправить</button>';
       if (i.error) { cls = ' muted'; btn = '<button class="send" disabled>Ошибка</button>'; meta = '<small class="err">' + esc(i.error) + '</small>'; }
       else if (i.sent) { cls = ' sent'; btn = '<button class="send" disabled>✓ Ушло</button>'; }
       else if (i.empty && !i.preparedId) { cls = ' muted'; btn = '<button class="send" disabled>Нет чеков</button>'; }
       else if (i.expires && i.expires < now) { cls = ' muted'; btn = '<button class="send" disabled>Истёк</button>'; meta = '<small class="err">Сформируй заново</small>'; }
       else { btn = send; if (i.empty) meta = '<small>сообщение «данных не обнаружено»</small>'; }
-      return '<div class="q' + cls + '"><span class="xl">' + (i.empty ? 'TXT' : 'XLSX') + '</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
+      return '<div class="q' + cls + '"><span class="xl">' + (i.empty ? 'TXT' : kind === 'an' ? 'DOCX' : 'XLSX') + '</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
     };
     const block = ([kind, b]) => {
       const items = Object.values(b.items), ready = items.filter(i => i.preparedId);
       const done = ready.filter(i => i.sent).length, rest = ready.length - done, frac = ready.length ? done / ready.length : 0;
-      const title = (kind === 'sos' ? 'Камеры SOS' : 'Чеки') + ' · ' + b.period.label;
-      const hint = kind === 'sos' ? 'Нажми «Отправить» и выбери группу «Камеры SOS».' : 'Нажми «Отправить» и выбери группу региона.';
+      const title = ({sos: 'Камеры SOS', an: 'Аналитика'}[kind] || 'Чеки') + ' · ' + b.period.label;
+      const hint = {sos: 'Нажми «Отправить» и выбери группу «Камеры SOS».', an: 'Нажми «Отправить» и выбери чат директора.'}[kind] || 'Нажми «Отправить» и выбери группу региона.';
       const group = (net, label) => {
         const g = items.filter(i => i.net === net); if (!g.length) return '';
         const r = g.filter(i => i.preparedId);
@@ -692,7 +805,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<circle class="bgc" cx="50" cy="50" r="40"/><circle class="fg" cx="50" cy="50" r="40" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 50 50)"/>' +
           '<text x="50" y="57" text-anchor="middle">' + done + '/' + ready.length + '</text></svg>' +
           '<div><b>' + esc(title) + '</b><p>' + (rest ? 'Осталось ' + rest + '. ' + hint : 'Всё отправлено.') + '</p></div></div>' +
-        '<div class="queue">' + (kind === 'sos' ? group('sos', 'Регионы') : group('ft', NETS.ft) + group('r', NETS.r)) + '</div>';
+        '<div class="queue">' + (kind === 'sos' ? group('sos', 'Регионы') : kind === 'an' ? group('an', 'Документы') : group('ft', NETS.ft) + group('r', NETS.r)) + '</div>';
     };
     $('#send-body').innerHTML =
       '<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs></svg>' +
@@ -704,8 +817,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   $('#send-body').addEventListener('click', e => {
     const b = e.target.closest('[data-send]'); if (!b) return;
-    const kind = b.dataset.kind === 'sos' ? 'sos' : 'checks';
-    const batch = kind === 'sos' ? state.sosBatch : state.batch;
+    const kind = ['sos', 'an'].includes(b.dataset.kind) ? b.dataset.kind : 'checks';
+    const batch = {sos: state.sosBatch, an: state.anBatch}[kind] || state.batch;
     const it = batch && batch.items[b.dataset.send]; if (!it) return;
     if (!tg || !tg.shareMessage || !tg.isVersionAtLeast('8.0')) { toast('Обнови Telegram: нужна версия с поддержкой отправки из приложений'); return; }
     haptic();
@@ -717,7 +830,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   /* ---------- Навигация ---------- */
-  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', send: 's-send', history: 's-history'};
+  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', send: 's-send', history: 's-history'};
   let current = 'home';
   function go(key) {
     current = key;
@@ -727,7 +840,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       if (on) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
     });
     document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
-    const form = key === 'checks' || key === 'sos';
+    const form = key === 'checks' || key === 'sos' || key === 'an';
     $('#dock').hidden = !form;
     $('#tabs').hidden = form;
     if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
@@ -735,18 +848,19 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
     // SOS: показываем сохранённое сразу и обновляем в фоне
     if (key === 'sos' && !S.loading) loadSos();
+    if (key === 'an' && !A.loading && !(A.sums[anKey()] && A.sums[anKey()].regions)) loadAn();
     renderAll();
   }
   if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
 
   function renderAll() {
-    renderHome(); renderChecks(); renderSos(); renderSend();
+    renderHome(); renderChecks(); renderSos(); renderAn(); renderSend();
     $('#hist-full').innerHTML = histItems(0);
   }
 
   document.addEventListener('click', e => {
     const g = e.target.closest('[data-go]'); if (g) { haptic(); go(g.dataset.go); return; }
-    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : loadSummary(r.dataset.retry, true); return; }
+    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : loadSummary(r.dataset.retry, true); return; }
     const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   });
   $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
