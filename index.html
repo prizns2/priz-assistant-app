@@ -293,17 +293,38 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     return j.data;
   }
 
+  /* Последняя сводка хранится на устройстве: при открытии показываем её сразу, свежую грузим в фоне. */
+  const STORE_KEY = 'priz:v1';
+  const dayStamp = () => new Date().toDateString();
+  function saveLocal() {
+    try {
+      const sums = {};
+      Object.keys(state.sums).forEach(k => { if (state.sums[k] && state.sums[k].regions) sums[k] = state.sums[k]; });
+      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, batch: state.batch, history: state.history}));
+    } catch (e) {}
+  }
+  function restoreLocal() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (!d || d.day !== dayStamp()) return; // периоды считаются от сегодняшней даты
+      state.sums = d.sums || {}; state.batch = d.batch || null; state.history = d.history || [];
+    } catch (e) {}
+  }
+
   async function loadSummary(period, fresh) {
     state.loading[period] = true;
     if (period === state.period) renderChecks();
     if (period === 'week') renderHome();
     try {
       const d = await api('summary', {period, fresh: !!fresh});
+      if (fresh) Object.keys(state.sums).forEach(k => { if (k !== period) delete state.sums[k]; });
       state.sums[period] = d.summary;
       state.batch = d.batch; state.history = d.history || [];
-      if (fresh) Object.keys(state.sums).forEach(k => { if (k !== period) delete state.sums[k]; });
+      saveLocal();
     } catch (e) {
-      state.sums[period] = {error: e.message};
+      // Есть сохранённые данные — оставляем их, об ошибке только сообщаем.
+      if (state.sums[period] && state.sums[period].regions) toast('Не удалось обновить: ' + e.message);
+      else state.sums[period] = {error: e.message};
     } finally {
       state.loading[period] = false;
       renderAll();
@@ -472,7 +493,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const iv = setInterval(() => { $('#prog').style.width = Math.min(92, (Date.now() - t0) / est * 92) + '%'; }, 300);
     try {
       const d = await api('build', {net: state.net, region: state.region, period: state.period});
-      state.batch = d.batch; state.history = d.history;
+      state.batch = d.batch; state.history = d.history; saveLocal();
       $('#prog').style.width = '100%'; haptic('ok');
       toast('Готово. Файлы пришли в чат с ботом');
       setTimeout(() => go('send'), 400);
@@ -534,7 +555,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     tg.shareMessage(it.preparedId, async ok => {
       if (!ok) return;
       it.sent = true; renderSend(); haptic('ok'); toast('Отправлено: ' + it.name);
-      try { const d = await api('markSent', {key: it.key}); state.batch = d.batch; state.history = d.history; renderSend(); } catch (err) {}
+      try { const d = await api('markSent', {key: it.key}); state.batch = d.batch; state.history = d.history; saveLocal(); renderSend(); } catch (err) {}
     });
   });
 
@@ -573,8 +594,12 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   let tt;
   function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
 
+  if (tg && tg.initData) restoreLocal();
   renderAll();
-  if (tg && tg.initData) loadSummary('week');
+  if (tg && tg.initData) {
+    // Сервер при первом чтении кэширует все периоды — второй запрос уже мгновенный.
+    loadSummary('week').then(() => { if (state.period !== 'week') loadSummary(state.period); });
+  }
 })();
 </script>
 </body>
