@@ -813,10 +813,12 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const t = new Date(); t.setHours(0, 0, 0, 0);
     const mon = addD(t, -((t.getDay() + 6) % 7));
     const m1 = new Date(t.getFullYear(), t.getMonth(), 1), pm1 = new Date(t.getFullYear(), t.getMonth() - 1, 1), pm0 = addD(m1, -1);
+    const mEnd = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+    // «Эта неделя» и «Этот месяц» — до конца периода, чтобы новые записи тоже были видны
     return [
       ['today', 'Сегодня', t, t], ['yday', 'Вчера', addD(t, -1), addD(t, -1)],
-      ['week', 'Эта неделя', mon, t], ['pweek', 'Прошлая неделя', addD(mon, -7), addD(mon, -1)],
-      ['month', 'Этот месяц', m1, t], ['pmonth', 'Прошлый месяц', pm1, pm0]
+      ['week', 'Эта неделя', mon, addD(mon, 6)], ['pweek', 'Прошлая неделя', addD(mon, -7), addD(mon, -1)],
+      ['month', 'Этот месяц', m1, mEnd], ['pmonth', 'Прошлый месяц', pm1, pm0]
     ].map(([id, name, a, b]) => ({id, name, from: iso(a), to: iso(b)}));
   }
   const dtKeys = () => D.region === 'all' ? D.tables.filter(x => x.net === D.net).map(x => x.key) : [D.region];
