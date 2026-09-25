@@ -415,7 +415,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<span><b>Неоплаченные чеки</b><small>ФТ · Рулька · Excel</small></span></button>' +
         '<button class="mod" data-go="sos">' + (sosLeft() ? '<span class="badge num">' + sosLeft() + '</span>' : '') +
           '<span class="ic" style="color:var(--ember)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></span>' +
-          '<span><b>Камеры SOS</b><small>13 регионов · ПН → ПН</small></span></button>' +
+          '<span><b>Камеры SOS</b><small>Рульки · ПН → ПН</small></span></button>' +
         soonMod('Аналитика директору', 'ФТ · Рулька · месяц', 'var(--ok)', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>') +
         soonMod('Отображение дат', 'Диапазон дат', 'var(--warn)', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>') +
       '</div></div>' +
@@ -578,8 +578,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     $('#sos-pnote').textContent = s && s.range ? s.range.label : (S.period === 'mm' ? 'с прошлого понедельника по этот' : '');
     const busy = S.loading && !(s && s.regions);
     if (busy || !s) {
-      $('#sos-regions').innerHTML = Array.from({length: 13}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
-      $('#sos-pv').innerHTML = '<div class="skel" style="height:220px"></div><div class="note" style="margin-top:10px">Читаю 13 таблиц…</div>';
+      $('#sos-regions').innerHTML = Array.from({length: 2}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
+      $('#sos-pv').innerHTML = '<div class="skel" style="height:220px"></div><div class="note" style="margin-top:10px">Читаю таблицы Рулек…</div>';
       if (current === 'sos') $('#cta').disabled = true;
       return;
     }
@@ -587,7 +587,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
     if (S.region !== 'all' && !s.regions.some(r => r.key === S.region)) S.region = 'all';
     $('#sos-regions').innerHTML =
-      '<button class="reg" data-r="all" aria-pressed="' + (S.region === 'all') + '">Все регионы <em class="num">' + s.total + '</em></button>' +
+      '<button class="reg" data-r="all" aria-pressed="' + (S.region === 'all') + '">Обе Рульки <em class="num">' + s.total + '</em></button>' +
       s.regions.map(r => '<button class="reg' + (r.error ? ' err' : '') + '" data-r="' + r.key + '" aria-pressed="' + (S.region === r.key) + '">' + esc(r.name) + ' <em class="num">' + (r.error ? '!' : r.count) + '</em></button>').join('');
 
     const sel = S.region === 'all' ? null : s.regions.find(r => r.key === S.region);
@@ -599,7 +599,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
     $('#sos-pv').innerHTML =
       (errs.length ? '<div class="warnbox" style="margin-bottom:12px">' + errs.map(r => esc(r.name) + ': ' + esc(r.error)).join('<br>') + '</div>' : '') +
-      '<div class="preview"><div class="pv-top"><b>' + esc(sel ? sel.name : 'Все регионы · 13') + '</b><span class="num">' + count + ' ' + plural(count, 'запись', 'записи', 'записей') + '</span></div>' +
+      '<div class="preview"><div class="pv-top"><b>' + esc(sel ? sel.name : 'Обе Рульки') + '</b><span class="num">' + count + ' ' + plural(count, 'запись', 'записи', 'записей') + '</span></div>' +
       (rows.length ? rows.map(x => '<div class="pv-row"><span class="tt">' + esc((sel ? '' : x.reg + ' · ') + x.tt) + '</span><span class="sum num">' + esc(x.time) + '</span><span class="fab">' + esc(x.problem) + '</span><span class="d num">' + esc(x.date) + '</span></div>').join('')
         : '<div class="empty">За этот период записей нет</div>') +
       '</div>' +
