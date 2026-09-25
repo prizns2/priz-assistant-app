@@ -318,8 +318,14 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify(Object.assign({action, initData: tg ? tg.initData : ''}, body || {}))
     });
+    const text = await res.text();
     let j;
-    try { j = await res.json(); } catch (e) { throw new Error('Сервер ответил не JSON. Проверь адрес API_URL и доступ «Все».'); }
+    try { j = JSON.parse(text); } catch (e) {
+      // Google отдал страницу ошибки — показываем её заголовок/текст, чтобы было видно причину
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const why = ((doc.title || '') + ' ' + (doc.body ? doc.body.innerText : text)).replace(/\s+/g, ' ').trim().slice(0, 220);
+      throw new Error('Сервер Google ответил ошибкой (' + res.status + '): ' + (why || 'пустой ответ'));
+    }
     if (!j.ok) throw new Error(j.error || 'Неизвестная ошибка');
     return j.data;
   }
