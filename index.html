@@ -177,6 +177,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 .dates{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .dates label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 .dates input{min-width:0;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);color:var(--text);font:500 14px var(--mono);color-scheme:dark}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.preset{padding:12px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);font-weight:700;font-size:14px;text-align:left}
+.preset small{display:block;font:500 11px var(--mono);color:var(--faint);margin-top:3px}
+.preset[aria-pressed="true"]{border-color:var(--orchid,#D66BF0);background:var(--surface-3)}
+.preset:disabled,.btn2:disabled{opacity:.5}
+.dt-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
+.dt-row b{display:block;font-size:14px}
+.dt-row small{color:var(--muted);font-size:12px}
+.dt-row small.err{color:var(--warn)}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);opacity:0;z-index:9;background:#221E31;border:1px solid var(--line-2);padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;transition:all .3s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 </style>
@@ -273,6 +282,40 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       <div class="regions" id="an-regions"></div>
     </div>
     <div id="an-pv"></div>
+  </section>
+
+  <!-- ОТОБРАЖЕНИЕ ДАТ -->
+  <section class="screen" id="s-dates" hidden>
+    <button class="back" data-go="home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Главная
+    </button>
+    <h1 class="h1">Отображение дат</h1>
+    <div>
+      <div class="label">Таблицы</div>
+      <div class="seg two" role="group" aria-label="Сеть" id="dt-net">
+        <button aria-pressed="true" data-n="ft">ФТ <em class="cnt">11 таблиц</em></button>
+        <button aria-pressed="false" data-n="r">Рулька <em class="cnt">2 таблицы</em></button>
+      </div>
+      <div class="regions" id="dt-regions" style="margin-top:10px"></div>
+    </div>
+    <div>
+      <div class="label">Одно нажатие — и в таблицах показаны только эти даты</div>
+      <div class="presets" id="dt-presets"></div>
+    </div>
+    <div>
+      <div class="label">Месяц</div>
+      <div class="regions" id="dt-months"></div>
+    </div>
+    <div>
+      <div class="label">Дата или период</div>
+      <div class="dates">
+        <label>С<input type="date" id="dt-from"></label>
+        <label>По<input type="date" id="dt-to"></label>
+      </div>
+      <button class="btn2" id="dt-custom" style="margin-top:10px">Показать выбранные даты</button>
+    </div>
+    <button class="btn2" id="dt-reset">Снять фильтр дат</button>
+    <div id="dt-result"></div>
   </section>
 
   <!-- РАССЫЛКА -->
@@ -449,7 +492,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<span><b>Камеры SOS</b><small>Рульки · ПН → ПН</small></span></button>' +
         '<button class="mod" data-go="an"><span class="ic" style="color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>' +
           '<span><b>Аналитика директору</b><small>ФТ · Рулька · месяц · Word</small></span></button>' +
-        soonMod('Отображение дат', 'Диапазон дат', 'var(--warn)', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>') +
+        '<button class="mod" data-go="dates"><span class="ic" style="color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>' +
+          '<span><b>Отображение дат</b><small>Фильтр в таблицах · 1 нажатие</small></span></button>' +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
       '</div>';
@@ -458,12 +502,6 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   // Сколько файлов SOS ждут отправки — бейдж на модуле
   const sosLeft = () => state.sosBatch ? Object.values(state.sosBatch.items).filter(i => i.preparedId && !i.sent).length : 0;
-
-  function soonMod(t, sub, color, path) {
-    return '<button class="mod" data-toast="«' + t + '» подключим следующим шагом"><span class="soon">скоро</span>' +
-      '<span class="ic" style="color:' + color + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg></span>' +
-      '<span><b>' + t + '</b><small>' + sub + '</small></span></button>';
-  }
 
   function spark(days) {
     const W = 320, H = 70, pad = 8, max = Math.max(1, ...days.map(d => d.sum)) * 1.1;
@@ -766,6 +804,92 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
   }
 
+  /* ---------- ОТОБРАЖЕНИЕ ДАТ ---------- */
+  const D = { net: 'ft', region: 'all', tables: [], state: {}, results: null, busy: false, active: '', loaded: false };
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const ru = s => s.split('-').reverse().join('.');
+  const addD = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  function datePresets() {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const mon = addD(t, -((t.getDay() + 6) % 7));
+    const m1 = new Date(t.getFullYear(), t.getMonth(), 1), pm1 = new Date(t.getFullYear(), t.getMonth() - 1, 1), pm0 = addD(m1, -1);
+    return [
+      ['today', 'Сегодня', t, t], ['yday', 'Вчера', addD(t, -1), addD(t, -1)],
+      ['week', 'Эта неделя', mon, t], ['pweek', 'Прошлая неделя', addD(mon, -7), addD(mon, -1)],
+      ['month', 'Этот месяц', m1, t], ['pmonth', 'Прошлый месяц', pm1, pm0]
+    ].map(([id, name, a, b]) => ({id, name, from: iso(a), to: iso(b)}));
+  }
+  const dtKeys = () => D.region === 'all' ? D.tables.filter(x => x.net === D.net).map(x => x.key) : [D.region];
+
+  async function loadDates() {
+    try { const d = await api('datesState'); D.tables = d.dates.tables; D.state = d.dates.state || {}; D.loaded = true; applyState(d); }
+    catch (e) { toast(e.message); }
+    renderDates();
+  }
+
+  async function applyDates(body, id, what) {
+    if (D.busy) return;
+    const keys = dtKeys(); if (!keys.length) return;
+    D.busy = true; D.active = id; D.results = null; renderDates(); haptic();
+    toast((body.reset ? 'Снимаю фильтр' : 'Показываю ' + what) + ' · ' + keys.length + ' ' + plural(keys.length, 'таблица', 'таблицы', 'таблиц') + '…');
+    try {
+      const d = await api('datesApply', Object.assign({keys}, body));
+      D.results = d.dates.results; D.state = d.dates.state || D.state; applyState(d);
+      const bad = D.results.filter(r => r.error).length;
+      haptic(bad ? 'err' : 'ok'); toast(bad ? 'Готово, но с ошибками: ' + bad : 'Готово. Открой таблицу');
+    } catch (e) { haptic('err'); toast(e.message); }
+    finally { D.busy = false; renderDates(); }
+  }
+
+  function renderDates() {
+    document.querySelectorAll('#dt-net button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === D.net));
+    const tabs = D.tables.filter(x => x.net === D.net);
+    if (D.region !== 'all' && !tabs.some(x => x.key === D.region)) D.region = 'all';
+    $('#dt-regions').innerHTML = !D.loaded ? Array.from({length: 4}, (_, i) => '<span class="skel" style="width:' + (80 + i * 13) + 'px;height:36px"></span>').join('')
+      : '<button class="reg" data-r="all" aria-pressed="' + (D.region === 'all') + '">' + (D.net === 'ft' ? 'Все ФТ' : 'Обе Рульки') + '</button>' +
+        tabs.map(x => '<button class="reg" data-r="' + x.key + '" aria-pressed="' + (D.region === x.key) + '">' + esc(x.name) + '</button>').join('');
+    $('#dt-presets').innerHTML = datePresets().map(p => '<button class="preset" data-p="' + p.id + '" aria-pressed="' + (D.active === p.id) + '"' + (D.busy || !D.loaded ? ' disabled' : '') + '>' +
+      esc(p.name) + '<small>' + (p.from === p.to ? ru(p.from) : ru(p.from).slice(0, 5) + ' – ' + ru(p.to)) + '</small></button>').join('');
+    $('#dt-months').innerHTML = AN_MONTH_LIST.map(m => '<button class="reg" data-m="' + m + '" aria-pressed="' + (D.active === 'm' + m) + '"' + (D.busy || !D.loaded ? ' disabled' : '') + '>' + monthLabel(m) + '</button>').join('');
+    $('#dt-custom').disabled = $('#dt-reset').disabled = D.busy || !D.loaded;
+
+    const list = D.results
+      ? D.results.map(r => ({name: r.name, url: r.url, line: r.error ? '<small class="err">' + esc(r.error) + '</small>'
+          : '<small>' + (D.state[r.key] ? esc(D.state[r.key].label) : 'фильтр дат снят') + ' · ' + r.sheets.length + ' ' + plural(r.sheets.length, 'лист', 'листа', 'листов') + '</small>' +
+            (r.skipped.length ? '<small class="err">Пропущено: ' + esc(r.skipped.join(', ')) + '</small>' : '')}))
+      : tabs.filter(x => D.region === 'all' || x.key === D.region).map(x => ({name: x.name, url: x.url,
+          line: '<small>' + (D.state[x.key] ? 'Сейчас: ' + esc(D.state[x.key].label) + ' · ' + esc(D.state[x.key].at) : 'Фильтр дат не ставили') + '</small>'}));
+    $('#dt-result').innerHTML = !D.loaded ? '' :
+      '<div class="qh" style="margin-bottom:8px">' + (D.results ? 'Результат' : 'Сейчас в таблицах') + '</div><div style="display:flex;flex-direction:column;gap:8px">' +
+      list.map(x => '<div class="dt-row"><div><b>' + esc(x.name) + '</b>' + x.line + '</div><button class="send" data-open="' + esc(x.url) + '">Открыть</button></div>').join('') + '</div>' +
+      '<div class="note" style="margin-top:10px">Фильтр общий: его видят все, кто открывает таблицу. Фильтры по другим колонкам не меняются.</div>';
+  }
+
+  $('#dt-net').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; D.net = b.dataset.n; D.region = 'all'; D.results = null; haptic(); renderDates(); });
+  $('#dt-regions').addEventListener('click', e => { const b = e.target.closest('.reg'); if (!b) return; D.region = b.dataset.r; D.results = null; haptic(); renderDates(); });
+  $('#dt-presets').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    const p = datePresets().find(x => x.id === b.dataset.p);
+    applyDates({from: p.from, to: p.to, label: p.name.toLowerCase() + ' (' + (p.from === p.to ? ru(p.from) : ru(p.from) + ' – ' + ru(p.to)) + ')'}, p.id, p.name.toLowerCase());
+  });
+  $('#dt-months').addEventListener('click', e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    const m = b.dataset.m, last = new Date(+m.slice(0, 4), +m.slice(5), 0);
+    applyDates({from: m + '-01', to: iso(last), label: monthLabel(m)}, 'm' + m, monthLabel(m));
+  });
+  $('#dt-custom').addEventListener('click', () => {
+    const a = $('#dt-from').value, b = $('#dt-to').value || a;
+    if (!a) { toast('Выбери дату «С»'); return; }
+    if (a > b) { toast('Дата «С» позже даты «По»'); return; }
+    const label = a === b ? ru(a) : ru(a) + ' – ' + ru(b);
+    applyDates({from: a, to: b, label}, 'custom', label);
+  });
+  $('#dt-reset').addEventListener('click', () => applyDates({reset: true}, '', ''));
+  document.addEventListener('click', e => {
+    const o = e.target.closest('[data-open]'); if (!o) return;
+    haptic(); if (tg && tg.openLink) tg.openLink(o.dataset.open); else window.open(o.dataset.open, '_blank');
+  });
+
   /* ---------- РАССЫЛКА ---------- */
   function renderSend() {
     const blocks = [['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
@@ -830,7 +954,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   /* ---------- Навигация ---------- */
-  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', send: 's-send', history: 's-history'};
+  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', dates: 's-dates', send: 's-send', history: 's-history'};
   let current = 'home';
   function go(key) {
     current = key;
@@ -842,19 +966,20 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
     const form = key === 'checks' || key === 'sos' || key === 'an';
     $('#dock').hidden = !form;
-    $('#tabs').hidden = form;
+    $('#tabs').hidden = form || key === 'dates';
     if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
     window.scrollTo(0, 0);
     if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
     // SOS: показываем сохранённое сразу и обновляем в фоне
     if (key === 'sos' && !S.loading) loadSos();
+    if (key === 'dates') loadDates();
     if (key === 'an' && !A.loading && !(A.sums[anKey()] && A.sums[anKey()].regions)) loadAn();
     renderAll();
   }
   if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
 
   function renderAll() {
-    renderHome(); renderChecks(); renderSos(); renderAn(); renderSend();
+    renderHome(); renderChecks(); renderSos(); renderAn(); renderDates(); renderSend();
     $('#hist-full').innerHTML = histItems(0);
   }
 
