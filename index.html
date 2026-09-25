@@ -208,8 +208,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     <div>
       <div class="label">Период</div>
       <div class="seg" role="group" aria-label="Период" id="seg">
-        <button aria-pressed="true" data-p="week">Неделя</button>
-        <button aria-pressed="false" data-p="prev">Прошлая</button>
+        <button aria-pressed="true" data-p="wd">ПН–ПТ</button>
+        <button aria-pressed="false" data-p="we">ПТ–ВС</button>
+        <button aria-pressed="false" data-p="week">7 дней</button>
         <button aria-pressed="false" data-p="month">Месяц</button>
         <button aria-pressed="false" data-p="all">Всё</button>
       </div>
@@ -275,7 +276,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
 
-  const state = { sums: {}, period: 'week', net: 'ft', region: 'all', batch: null, history: [], loading: {}, building: false };
+  // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
+  const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
+  const state = { sums: {}, period: DEFAULT_PERIOD, net: 'ft', region: 'all', batch: null, history: [], loading: {}, building: false };
 
   /* ---------- API ---------- */
   async function api(action, body) {
@@ -408,7 +411,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   }
 
   /* ---------- ЧЕКИ ---------- */
-  const PERIOD_HINT = {week: 'последние 7 дней', prev: '7 дней до этого', month: 'с 1-го числа', all: 'все даты в таблицах'};
+  const PERIOD_HINT = {wd: 'понедельник – пятница', we: 'пятница – воскресенье', week: 'последние 7 дней', prev: '7 дней до этого', month: 'с 1-го числа', all: 'все даты в таблицах'};
   function renderChecks() {
     const s = state.sums[state.period];
     const loading = state.loading[state.period] || !s;
