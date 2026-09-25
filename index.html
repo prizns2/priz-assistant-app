@@ -174,6 +174,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 .errcard p{margin:0;color:var(--muted);font-size:13px}
 .btn2{align-self:flex-start;padding:9px 14px;border-radius:11px;background:var(--surface-3);font-weight:700;font-size:13px;border:1px solid var(--line-2)}
 
+.dates{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.dates label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+.dates input{min-width:0;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);color:var(--text);font:500 14px var(--mono);color-scheme:dark}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);opacity:0;z-index:9;background:#221E31;border:1px solid var(--line-2);padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;transition:all .3s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 </style>
@@ -221,6 +224,31 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       <div class="regions" id="regions"></div>
     </div>
     <div id="pv"></div>
+  </section>
+
+  <!-- КАМЕРЫ SOS -->
+  <section class="screen" id="s-sos" hidden>
+    <button class="back" data-go="home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Главная
+    </button>
+    <h1 class="h1">Камеры SOS</h1>
+    <div>
+      <div class="label">Период</div>
+      <div class="seg two" role="group" aria-label="Период" id="sos-seg">
+        <button aria-pressed="true" data-p="mm">ПН → ПН</button>
+        <button aria-pressed="false" data-p="custom">Свой период</button>
+      </div>
+      <div class="dates" id="sos-dates" hidden>
+        <label>С<input type="date" id="sos-from"></label>
+        <label>По<input type="date" id="sos-to"></label>
+      </div>
+      <div class="period-note num" id="sos-pnote">&nbsp;</div>
+    </div>
+    <div>
+      <div class="label">Регион</div>
+      <div class="regions" id="sos-regions"></div>
+    </div>
+    <div id="sos-pv"></div>
   </section>
 
   <!-- РАССЫЛКА -->
@@ -278,7 +306,10 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
-  const state = { sums: {}, period: DEFAULT_PERIOD, net: 'ft', region: 'all', batch: null, history: [], loading: {}, building: false };
+  const state = { sums: {}, period: DEFAULT_PERIOD, net: 'ft', region: 'all', batch: null, sosBatch: null, history: [], loading: {}, building: false,
+                  sos: { period: 'mm', from: '', to: '', region: 'all', sums: {}, loading: false } };
+  // Каждый ответ сервера несёт обе пачки и историю
+  const applyState = d => { state.batch = d.batch || null; state.sosBatch = d.sosBatch || null; state.history = d.history || []; };
 
   /* ---------- API ---------- */
   async function api(action, body) {
@@ -300,14 +331,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     try {
       const sums = {};
       Object.keys(state.sums).forEach(k => { if (state.sums[k] && state.sums[k].regions) sums[k] = state.sums[k]; });
-      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, batch: state.batch, history: state.history}));
+      const sos = state.sos.sums.mm && state.sos.sums.mm.regions ? {mm: state.sos.sums.mm} : {};
+      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, sos, batch: state.batch, sosBatch: state.sosBatch, history: state.history}));
     } catch (e) {}
   }
   function restoreLocal() {
     try {
       const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
       if (!d || d.day !== dayStamp()) return; // периоды считаются от сегодняшней даты
-      state.sums = d.sums || {}; state.batch = d.batch || null; state.history = d.history || [];
+      state.sums = d.sums || {}; state.sos.sums = d.sos || {}; applyState(d);
     } catch (e) {}
   }
 
@@ -319,7 +351,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       const d = await api('summary', {period, fresh: !!fresh});
       if (fresh) Object.keys(state.sums).forEach(k => { if (k !== period) delete state.sums[k]; });
       state.sums[period] = d.summary;
-      state.batch = d.batch; state.history = d.history || [];
+      applyState(d);
       saveLocal();
     } catch (e) {
       // Есть сохранённые данные — оставляем их, об ошибке только сообщаем.
@@ -381,7 +413,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="mod" data-go="checks">' + (count ? '<span class="badge num">' + count + '</span>' : '') +
           '<span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>' +
           '<span><b>Неоплаченные чеки</b><small>ФТ · Рулька · Excel</small></span></button>' +
-        soonMod('Камеры SOS', 'По регионам', 'var(--ember)', '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>') +
+        '<button class="mod" data-go="sos">' + (sosLeft() ? '<span class="badge num">' + sosLeft() + '</span>' : '') +
+          '<span class="ic" style="color:var(--ember)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/></svg></span>' +
+          '<span><b>Камеры SOS</b><small>13 регионов · ПН → ПН</small></span></button>' +
         soonMod('Аналитика директору', 'ФТ · Рулька · месяц', 'var(--ok)', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>') +
         soonMod('Отображение дат', 'Диапазон дат', 'var(--warn)', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>') +
       '</div></div>' +
@@ -389,6 +423,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       '</div>';
     countUp($('#hero-sum'), total);
   }
+
+  // Сколько файлов SOS ждут отправки — бейдж на модуле
+  const sosLeft = () => state.sosBatch ? Object.values(state.sosBatch.items).filter(i => i.preparedId && !i.sent).length : 0;
 
   function soonMod(t, sub, color, path) {
     return '<button class="mod" data-toast="«' + t + '» подключим следующим шагом"><span class="soon">скоро</span>' +
@@ -443,10 +480,10 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     if (loading) {
       $('#regions').innerHTML = Array.from({length: state.net === 'ft' ? 12 : 2}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
       $('#pv').innerHTML = '<div class="skel" style="height:220px"></div>';
-      $('#cta').disabled = true;
+      if (current === 'checks') $('#cta').disabled = true;
       return;
     }
-    if (s.error) { $('#regions').innerHTML = ''; $('#pv').innerHTML = errCard(s.error, state.period); $('#cta').disabled = true; return; }
+    if (s.error) { $('#regions').innerHTML = ''; $('#pv').innerHTML = errCard(s.error, state.period); if (current === 'checks') $('#cta').disabled = true; return; }
 
     const regs = s.regions.filter(r => r.net === state.net);
     if (state.region !== 'all' && !regs.some(r => r.key === state.region)) state.region = 'all';
@@ -468,7 +505,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         : '<div class="empty">За этот период неоплаченных чеков нет</div>') +
       '<div class="pv-foot"><span>Итого</span><span class="num">' + money(sum) + ' ₴</span></div></div>' +
       '<div class="note" style="margin-top:10px">Показаны 3 последние строки. В Excel попадут все ' + count + '.</div>';
-    if (!state.building) {
+    if (current === 'checks' && !state.building) {
       $('#cta').disabled = count === 0;
       $('#cta-txt').textContent = count === 0 ? 'Нет чеков за период' : (sel ? 'Сформировать Excel' : 'Сформировать ' + regs.filter(r => r.count).length + ' ' + plural(regs.filter(r => r.count).length, 'файл', 'файла', 'файлов'));
     }
@@ -484,6 +521,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   $('#regions').addEventListener('click', e => { const b = e.target.closest('.reg'); if (!b) return; state.region = b.dataset.r; haptic(); renderChecks(); });
 
   $('#cta').addEventListener('click', async () => {
+    if (current === 'sos') return buildSos();
     if (state.building) return;
     state.building = true; $('#cta').disabled = true;
     const s = state.sums[state.period];
@@ -493,7 +531,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const iv = setInterval(() => { $('#prog').style.width = Math.min(92, (Date.now() - t0) / est * 92) + '%'; }, 300);
     try {
       const d = await api('build', {net: state.net, region: state.region, period: state.period});
-      state.batch = d.batch; state.history = d.history; saveLocal();
+      applyState(d); saveLocal();
       $('#prog').style.width = '100%'; haptic('ok');
       toast('Готово. Файлы пришли в чат с ботом');
       setTimeout(() => go('send'), 400);
@@ -505,62 +543,175 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
   });
 
-  /* ---------- РАССЫЛКА ---------- */
-  function renderSend() {
-    const b = state.batch;
-    const items = b ? Object.values(b.items) : [];
-    const ready = items.filter(i => i.preparedId);
-    const left = ready.filter(i => !i.sent).length;
-    $('#pip').hidden = !left; $('#pip').textContent = left;
+  /* ---------- КАМЕРЫ SOS ---------- */
+  const S = state.sos;
+  // Ключ сводки: ПН → ПН или конкретные даты своего периода
+  const sosKey = () => S.period === 'custom' ? 'c' + S.from + '_' + S.to : S.period;
+  const sosReq = () => S.period === 'custom' ? {period: 'custom', custom: {from: S.from, to: S.to}} : {period: S.period};
+  const customReady = () => S.from && S.to && S.from <= S.to;
 
-    if (!items.length) {
-      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в модуле чеков.</div></div>' +
-        '<button class="btn2" data-go="checks" style="margin-top:14px">Открыть чеки</button>';
+  async function loadSos(fresh) {
+    if (S.period === 'custom' && !customReady()) { renderSos(); return; }
+    const key = sosKey();
+    S.loading = true; renderSos();
+    try {
+      const d = await api('sosSummary', Object.assign(sosReq(), {fresh: !!fresh}));
+      S.sums[key] = d.summary; applyState(d); saveLocal();
+    } catch (e) {
+      if (S.sums[key] && S.sums[key].regions) toast('Не удалось обновить: ' + e.message);
+      else S.sums[key] = {error: e.message};
+    } finally {
+      S.loading = false; renderAll();
+    }
+  }
+
+  function renderSos() {
+    document.querySelectorAll('#sos-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === S.period));
+    $('#sos-dates').hidden = S.period !== 'custom';
+    const s = S.sums[sosKey()];
+    if (S.period === 'custom' && !customReady()) {
+      $('#sos-pnote').textContent = S.from && S.to ? 'Дата «с» позже даты «по»' : 'Выбери даты';
+      $('#sos-regions').innerHTML = ''; $('#sos-pv').innerHTML = '';
+      if (current === 'sos') { $('#cta').disabled = true; $('#cta-txt').textContent = 'Выбери период'; }
       return;
     }
-    const now = Date.now() / 1000;
-    const done = ready.filter(i => i.sent).length, C = 251.3, frac = ready.length ? done / ready.length : 0;
-    const item = i => {
-      let cls = '', btn, meta = '<small class="num">' + i.count + ' стр. · ' + money(i.sum) + ' ₴</small>';
+    $('#sos-pnote').textContent = s && s.range ? s.range.label : (S.period === 'mm' ? 'с прошлого понедельника по этот' : '');
+    const busy = S.loading && !(s && s.regions);
+    if (busy || !s) {
+      $('#sos-regions').innerHTML = Array.from({length: 13}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
+      $('#sos-pv').innerHTML = '<div class="skel" style="height:220px"></div><div class="note" style="margin-top:10px">Читаю 13 таблиц…</div>';
+      if (current === 'sos') $('#cta').disabled = true;
+      return;
+    }
+    if (s.error) { $('#sos-regions').innerHTML = ''; $('#sos-pv').innerHTML = errCard(s.error, 'sos'); if (current === 'sos') $('#cta').disabled = true; return; }
+
+    if (S.region !== 'all' && !s.regions.some(r => r.key === S.region)) S.region = 'all';
+    $('#sos-regions').innerHTML =
+      '<button class="reg" data-r="all" aria-pressed="' + (S.region === 'all') + '">Все регионы <em class="num">' + s.total + '</em></button>' +
+      s.regions.map(r => '<button class="reg' + (r.error ? ' err' : '') + '" data-r="' + r.key + '" aria-pressed="' + (S.region === r.key) + '">' + esc(r.name) + ' <em class="num">' + (r.error ? '!' : r.count) + '</em></button>').join('');
+
+    const sel = S.region === 'all' ? null : s.regions.find(r => r.key === S.region);
+    const rows = sel ? sel.preview.map(x => Object.assign({reg: sel.name}, x))
+      : s.regions.flatMap(r => r.preview.map(x => Object.assign({reg: r.name}, x))).sort((a, b) => cmpDate(b.date, a.date)).slice(0, 3);
+    const count = sel ? sel.count : s.total;
+    const errs = (sel ? [sel] : s.regions).filter(r => r.error);
+    const emptyRegs = (sel ? [sel] : s.regions).filter(r => !r.error && !r.count);
+
+    $('#sos-pv').innerHTML =
+      (errs.length ? '<div class="warnbox" style="margin-bottom:12px">' + errs.map(r => esc(r.name) + ': ' + esc(r.error)).join('<br>') + '</div>' : '') +
+      '<div class="preview"><div class="pv-top"><b>' + esc(sel ? sel.name : 'Все регионы · 13') + '</b><span class="num">' + count + ' ' + plural(count, 'запись', 'записи', 'записей') + '</span></div>' +
+      (rows.length ? rows.map(x => '<div class="pv-row"><span class="tt">' + esc((sel ? '' : x.reg + ' · ') + x.tt) + '</span><span class="sum num">' + esc(x.time) + '</span><span class="fab">' + esc(x.problem) + '</span><span class="d num">' + esc(x.date) + '</span></div>').join('')
+        : '<div class="empty">За этот период записей нет</div>') +
+      '</div>' +
+      '<div class="note" style="margin-top:10px">' + (emptyRegs.length && !sel ? 'Без записей: ' + emptyRegs.map(r => esc(r.name)).join(', ') + ' — для них будет готово сообщение «данных не обнаружено». ' : '') +
+        'Обновлено в ' + esc(s.updatedAt || '') + '.</div>';
+
+    if (current === 'sos' && !state.building) {
+      const withRows = (sel ? [sel] : s.regions).filter(r => r.count).length;
+      const n = sel ? 1 : s.regions.filter(r => !r.error).length;
+      $('#cta').disabled = n === 0;
+      $('#cta-txt').textContent = sel ? (sel.count ? 'Сформировать Excel' : 'Подготовить «данных нет»')
+        : 'Сформировать ' + withRows + ' ' + plural(withRows, 'файл', 'файла', 'файлов') + (n > withRows ? ' + ' + (n - withRows) + ' без данных' : '');
+    }
+  }
+
+  $('#sos-seg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.period = b.dataset.p; S.region = 'all'; haptic();
+    const s = S.sums[sosKey()];
+    if (!s || s.error) loadSos(); else renderSos();
+  });
+  ['#sos-from', '#sos-to'].forEach(id => $(id).addEventListener('change', () => {
+    S.from = $('#sos-from').value; S.to = $('#sos-to').value; S.region = 'all';
+    if (customReady() && !S.sums[sosKey()]) loadSos(); else renderSos();
+  }));
+  $('#sos-regions').addEventListener('click', e => { const b = e.target.closest('.reg'); if (!b) return; S.region = b.dataset.r; haptic(); renderSos(); });
+
+  async function buildSos() {
+    if (state.building) return;
+    const s = S.sums[sosKey()]; if (!s || !s.regions) return;
+    state.building = true; $('#cta').disabled = true;
+    const n = S.region === 'all' ? s.regions.length : 1;
+    const est = Math.max(6, n * 4) * 1000, t0 = Date.now();
+    $('#cta-txt').textContent = 'Собираю ' + n + ' ' + plural(n, 'регион', 'региона', 'регионов') + '…';
+    const iv = setInterval(() => { $('#prog').style.width = Math.min(92, (Date.now() - t0) / est * 92) + '%'; }, 300);
+    try {
+      const d = await api('sosBuild', Object.assign(sosReq(), {region: S.region}));
+      applyState(d); saveLocal();
+      $('#prog').style.width = '100%'; haptic('ok');
+      toast('Готово. Файлы пришли в чат с ботом');
+      setTimeout(() => go('send'), 400);
+    } catch (e) {
+      haptic('err'); toast(e.message);
+    } finally {
+      clearInterval(iv); state.building = false;
+      setTimeout(() => { $('#prog').style.width = '0'; renderSos(); }, 500);
+    }
+  }
+
+  /* ---------- РАССЫЛКА ---------- */
+  function renderSend() {
+    const blocks = [['checks', state.batch], ['sos', state.sosBatch]].filter(([, b]) => b && Object.keys(b.items).length);
+    const left = blocks.reduce((n, [, b]) => n + Object.values(b.items).filter(i => i.preparedId && !i.sent).length, 0);
+    $('#pip').hidden = !left; $('#pip').textContent = left;
+
+    if (!blocks.length) {
+      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в модуле чеков или Камер SOS.</div></div>' +
+        '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn2" data-go="checks">Открыть чеки</button><button class="btn2" data-go="sos">Камеры SOS</button></div>';
+      return;
+    }
+    const now = Date.now() / 1000, C = 251.3;
+    const item = (kind, i) => {
+      const sos = kind === 'sos';
+      let cls = '', btn, meta = '<small class="num">' + (sos ? i.count + ' ' + plural(i.count, 'запись', 'записи', 'записей') : i.count + ' стр. · ' + money(i.sum) + ' ₴') + '</small>';
+      const send = '<button class="send" data-kind="' + kind + '" data-send="' + i.key + '">Отправить</button>';
       if (i.error) { cls = ' muted'; btn = '<button class="send" disabled>Ошибка</button>'; meta = '<small class="err">' + esc(i.error) + '</small>'; }
-      else if (i.empty) { cls = ' muted'; btn = '<button class="send" disabled>Нет чеков</button>'; }
       else if (i.sent) { cls = ' sent'; btn = '<button class="send" disabled>✓ Ушло</button>'; }
+      else if (i.empty && !i.preparedId) { cls = ' muted'; btn = '<button class="send" disabled>Нет чеков</button>'; }
       else if (i.expires && i.expires < now) { cls = ' muted'; btn = '<button class="send" disabled>Истёк</button>'; meta = '<small class="err">Сформируй заново</small>'; }
-      else btn = '<button class="send" data-send="' + i.key + '">Отправить</button>';
-      return '<div class="q' + cls + '"><span class="xl">XLSX</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
+      else { btn = send; if (i.empty) meta = '<small>сообщение «данных не обнаружено»</small>'; }
+      return '<div class="q' + cls + '"><span class="xl">' + (i.empty ? 'TXT' : 'XLSX') + '</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
     };
-    const group = net => {
-      const g = items.filter(i => i.net === net); if (!g.length) return '';
-      const r = g.filter(i => i.preparedId);
-      return '<div class="qh">' + NETS[net] + ' <span class="num">' + r.filter(i => i.sent).length + ' из ' + r.length + '</span></div>' + g.map(item).join('');
+    const block = ([kind, b]) => {
+      const items = Object.values(b.items), ready = items.filter(i => i.preparedId);
+      const done = ready.filter(i => i.sent).length, rest = ready.length - done, frac = ready.length ? done / ready.length : 0;
+      const title = (kind === 'sos' ? 'Камеры SOS' : 'Чеки') + ' · ' + b.period.label;
+      const hint = kind === 'sos' ? 'Нажми «Отправить» и выбери группу «Камеры SOS».' : 'Нажми «Отправить» и выбери группу региона.';
+      const group = (net, label) => {
+        const g = items.filter(i => i.net === net); if (!g.length) return '';
+        const r = g.filter(i => i.preparedId);
+        return '<div class="qh">' + label + ' <span class="num">' + r.filter(i => i.sent).length + ' из ' + r.length + '</span></div>' + g.map(i => item(kind, i)).join('');
+      };
+      return '<div class="ring-card"><svg class="ring" viewBox="0 0 100 100" aria-hidden="true">' +
+          '<circle class="bgc" cx="50" cy="50" r="40"/><circle class="fg" cx="50" cy="50" r="40" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 50 50)"/>' +
+          '<text x="50" y="57" text-anchor="middle">' + done + '/' + ready.length + '</text></svg>' +
+          '<div><b>' + esc(title) + '</b><p>' + (rest ? 'Осталось ' + rest + '. ' + hint : 'Всё отправлено.') + '</p></div></div>' +
+        '<div class="queue">' + (kind === 'sos' ? group('sos', 'Регионы') : group('ft', NETS.ft) + group('r', NETS.r)) + '</div>';
     };
     $('#send-body').innerHTML =
-      '<div style="display:flex;flex-direction:column;gap:14px">' +
-      '<div class="ring-card"><svg class="ring" viewBox="0 0 100 100" aria-hidden="true">' +
-        '<defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs>' +
-        '<circle class="bgc" cx="50" cy="50" r="40"/><circle class="fg" cx="50" cy="50" r="40" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 50 50)"/>' +
-        '<text x="50" y="57" text-anchor="middle">' + done + '/' + ready.length + '</text></svg>' +
-        '<div><b>Чеки · ' + esc(b.period.label) + '</b><p>' + (left ? 'Осталось ' + left + '. Нажми «Отправить» и выбери группу региона.' : 'Все файлы отправлены.') + '</p></div></div>' +
-      '<div class="queue">' + group('ft') + group('r') + '</div>' +
+      '<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs></svg>' +
+      '<div style="display:flex;flex-direction:column;gap:14px">' + blocks.map(block).join('') +
       '<div class="hint"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>' +
-        '<span>Файл уходит от тебя с пометкой «via бот». Копии всех файлов лежат в чате с ботом: если группа не принимает сообщения через ботов, просто перешли файл оттуда.</span></div>' +
+        '<span>Сообщение уходит от тебя с пометкой «via бот», а его копия из чата с ботом удаляется. Если группа не принимает сообщения через ботов, перешли файл из чата с ботом до отправки.</span></div>' +
       '</div>';
   }
 
   $('#send-body').addEventListener('click', e => {
     const b = e.target.closest('[data-send]'); if (!b) return;
-    const it = state.batch.items[b.dataset.send];
+    const kind = b.dataset.kind === 'sos' ? 'sos' : 'checks';
+    const batch = kind === 'sos' ? state.sosBatch : state.batch;
+    const it = batch && batch.items[b.dataset.send]; if (!it) return;
     if (!tg || !tg.shareMessage || !tg.isVersionAtLeast('8.0')) { toast('Обнови Telegram: нужна версия с поддержкой отправки из приложений'); return; }
     haptic();
     tg.shareMessage(it.preparedId, async ok => {
       if (!ok) return;
       it.sent = true; renderSend(); haptic('ok'); toast('Отправлено: ' + it.name);
-      try { const d = await api('markSent', {key: it.key}); state.batch = d.batch; state.history = d.history; saveLocal(); renderSend(); } catch (err) {}
+      try { const d = await api('markSent', {key: it.key, kind}); applyState(d); saveLocal(); renderSend(); } catch (err) {}
     });
   });
 
   /* ---------- Навигация ---------- */
-  const SCREENS = {home: 's-home', checks: 's-checks', send: 's-send', history: 's-history'};
+  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', send: 's-send', history: 's-history'};
   let current = 'home';
   function go(key) {
     current = key;
@@ -570,23 +721,26 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       if (on) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
     });
     document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
-    $('#dock').hidden = key !== 'checks';
-    $('#tabs').hidden = key === 'checks';
+    const form = key === 'checks' || key === 'sos';
+    $('#dock').hidden = !form;
+    $('#tabs').hidden = form;
     if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
     window.scrollTo(0, 0);
     if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
+    // SOS: показываем сохранённое сразу и обновляем в фоне
+    if (key === 'sos' && !S.loading) loadSos();
     renderAll();
   }
   if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
 
   function renderAll() {
-    renderHome(); renderChecks(); renderSend();
+    renderHome(); renderChecks(); renderSos(); renderSend();
     $('#hist-full').innerHTML = histItems(0);
   }
 
   document.addEventListener('click', e => {
     const g = e.target.closest('[data-go]'); if (g) { haptic(); go(g.dataset.go); return; }
-    const r = e.target.closest('[data-retry]'); if (r) { loadSummary(r.dataset.retry, true); return; }
+    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : loadSummary(r.dataset.retry, true); return; }
     const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   });
   $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
