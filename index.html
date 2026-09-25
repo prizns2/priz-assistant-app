@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PRIZ Assistant</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<script>
+  /* ================= НАСТРОЙКА =================
+     Адрес развёртывания Apps Script (заканчивается на /exec) */
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwVWSCa8D8zIjBFtiqQ062WFMTqhgy6GlSZTxRsLvl2dWz0tSr7KJoRv0-3xAuVV1Qn/exec';
+</script>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#09080F; --surface:#13111C; --surface-2:#1B1828; --surface-3:#242036;
+  --line:rgba(236,230,255,.08); --line-2:rgba(236,230,255,.14);
+  --text:#F3F0FB; --muted:#9C95B5; --faint:#6A6484;
+  --violet:#8B5CF6; --orchid:#D66BF0; --ember:#FF8A5B;
+  --ok:#46D39A; --warn:#F5B94A; --bad:#FF6680;
+  --r-lg:24px; --r-md:16px;
+  --display:"Unbounded","Manrope",system-ui,sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:default}
+button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+.app{position:relative;max-width:520px;margin:0 auto;min-height:100%}
+.screen{padding:14px 18px calc(110px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px}
+@media (prefers-reduced-motion:no-preference){
+  .screen.enter{animation:rise .4s cubic-bezier(.2,.8,.2,1)}
+  @keyframes rise{from{opacity:.001;transform:translateY(10px)}to{opacity:1;transform:none}}
+}
+
+.hello{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hello small{display:block;color:var(--muted);font-size:13px}
+.hello b{font-family:var(--display);font-weight:600;font-size:20px;letter-spacing:-.01em}
+.icon-btn{width:42px;height:42px;border-radius:14px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--muted)}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.hero{position:relative;border-radius:var(--r-lg);padding:20px;background:var(--surface);border:1px solid var(--line);overflow:hidden;isolation:isolate}
+.hero::before{content:"";position:absolute;inset:-40% -30% auto auto;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle at 30% 30%,rgba(214,107,240,.55),rgba(139,92,246,.25) 45%,transparent 70%);filter:blur(10px);z-index:-1}
+.hero::after{content:"";position:absolute;inset:auto auto -60% -30%;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(255,138,91,.22),transparent 65%);z-index:-1}
+@media (prefers-reduced-motion:no-preference){.hero::before{animation:drift 12s ease-in-out infinite alternate}@keyframes drift{to{transform:translate(-40px,30px) scale(1.1)}}}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.big{font-family:var(--display);font-weight:700;font-size:38px;line-height:1.05;letter-spacing:-.03em;margin:8px 0 6px;word-break:break-word}
+.big span{font-size:20px;color:var(--muted);font-weight:500;margin-left:4px}
+.hero-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--muted)}
+.chip.up{color:var(--bad);background:rgba(255,102,128,.1);border-color:rgba(255,102,128,.2)}
+.chip.down{color:var(--ok);background:rgba(70,211,154,.1);border-color:rgba(70,211,154,.2)}
+.spark{margin-top:16px;width:100%;height:70px;display:block}
+.spark-days{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);font-family:var(--mono);margin-top:4px}
+.updated{font-size:11px;color:var(--faint);margin-top:10px}
+
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.sec-h h2{margin:0;font-size:15px;font-weight:700}
+.sec-h button{font-size:13px;color:var(--orchid);font-weight:600}
+
+.board{display:flex;flex-direction:column;gap:10px}
+.row-bar{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;font-size:13px}
+.row-bar .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-bar .v{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.track{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--violet),var(--orchid));transform-origin:left}
+@media (prefers-reduced-motion:no-preference){.fill{animation:grow .9s cubic-bezier(.2,.8,.2,1) both}@keyframes grow{from{transform:scaleX(0)}}}
+
+.mods{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mod{position:relative;text-align:left;padding:14px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;gap:14px;transition:transform .15s,border-color .15s}
+.mod:active{transform:scale(.97)}
+.mod .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--surface-2)}
+.mod .ic svg{width:20px;height:20px}
+.mod b{display:block;font-size:14px;line-height:1.25}
+.mod small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.mod .badge{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(255,102,128,.14);color:var(--bad)}
+.mod .soon{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md)}
+.li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px}
+.li + .li{border-top:1px solid var(--line)}
+.dot{width:8px;height:8px;border-radius:50%}
+.li b{font-size:13px;display:block}
+.li small{color:var(--muted);font-size:12px}
+.li time{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap}
+.empty{padding:18px 14px;color:var(--muted);font-size:13px;text-align:center}
+
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:600;font-size:13px;align-self:flex-start}
+.h1{font-family:var(--display);font-weight:600;font-size:24px;letter-spacing:-.02em;margin:0}
+.label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.seg.two{grid-template-columns:1fr 1fr}
+.seg button{padding:9px 4px;border-radius:10px;font-size:12px;font-weight:600;color:var(--muted);transition:background .2s,color .2s}
+.seg.two button{font-size:13px;padding:11px 6px}
+.seg .cnt{font-style:normal;font-weight:500;color:var(--faint);font-size:11px;margin-left:4px}
+.seg button[aria-pressed="true"]{background:var(--surface-3);color:var(--text)}
+.period-note{margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--faint)}
+.regions{display:flex;flex-wrap:wrap;gap:8px}
+.reg{padding:8px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:600;display:inline-flex;gap:8px;align-items:center;transition:all .15s}
+.reg em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.reg[aria-pressed="true"]{background:linear-gradient(135deg,rgba(139,92,246,.28),rgba(214,107,240,.2));border-color:rgba(214,107,240,.5)}
+.reg[aria-pressed="true"] em{color:var(--text)}
+.reg.err em{color:var(--warn)}
+
+.preview{border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);overflow:hidden}
+.pv-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.pv-top b{font-size:13px}
+.pv-top span{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.pv-row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px}
+.pv-row + .pv-row{border-top:1px solid var(--line)}
+.pv-row .tt{font-weight:700;font-size:13px}
+.pv-row .sum{font-family:var(--mono);font-size:13px;color:var(--ember);text-align:right}
+.pv-row .fab{grid-column:1/-1;color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pv-row .d{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.pv-foot{display:flex;justify-content:space-between;padding:12px 14px;background:var(--surface-2);font-weight:700}
+.pv-foot span:last-child{font-family:var(--mono)}
+.note{font-size:11px;color:var(--faint);text-align:center}
+.warnbox{padding:12px 14px;border-radius:var(--r-md);background:rgba(245,185,74,.08);border:1px solid rgba(245,185,74,.25);color:var(--warn);font-size:12px}
+
+.dock{position:fixed;left:0;right:0;bottom:0;padding:14px 18px calc(18px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 60%,transparent);z-index:3}
+.dock-in{max-width:484px;margin:0 auto}
+.cta{position:relative;width:100%;height:54px;border-radius:16px;font-weight:700;font-size:15px;background:linear-gradient(135deg,var(--violet),var(--orchid));box-shadow:0 12px 30px -10px rgba(214,107,240,.6);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.cta .prog{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,255,255,.18);transition:width .4s linear}
+.cta span{position:relative}
+.cta:disabled{opacity:.55}
+
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:3;background:rgba(11,10,17,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+.tabs-in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--faint);padding:4px;position:relative}
+.tab svg{width:22px;height:22px}
+.tab[aria-current="page"]{color:var(--text)}
+.tab[aria-current="page"] svg{color:var(--orchid)}
+.tab .pip{position:absolute;top:0;right:calc(50% - 18px);min-width:16px;height:16px;border-radius:9px;background:var(--orchid);color:#fff;font-size:10px;display:grid;place-items:center;padding:0 4px}
+
+.ring-card{display:flex;gap:18px;align-items:center;padding:18px;border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line)}
+.ring{width:88px;height:88px;flex:none}
+.ring circle{fill:none;stroke-width:9}
+.ring .bgc{stroke:var(--surface-3)}
+.ring .fg{stroke:url(#rg);stroke-linecap:round;transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)}
+.ring text{fill:var(--text);font-family:var(--display);font-weight:600;font-size:20px}
+.ring-card b{display:block;font-size:16px;margin-bottom:4px}
+.ring-card p{margin:0;color:var(--muted);font-size:13px}
+.queue{display:flex;flex-direction:column;gap:8px}
+.qh{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.qh span{font-family:var(--mono);letter-spacing:0;text-transform:none;font-weight:500;color:var(--faint)}
+.q{display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:10px 10px 10px 12px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);transition:opacity .3s}
+.q .xl{width:40px;height:40px;border-radius:12px;background:rgba(70,211,154,.12);color:var(--ok);display:grid;place-items:center;font-family:var(--mono);font-size:10px}
+.q.muted .xl{background:var(--surface-2);color:var(--faint)}
+.q b{display:block;font-size:14px}
+.q small{color:var(--muted);font-size:12px;font-family:var(--mono)}
+.q small.err{color:var(--warn);font-family:var(--body)}
+.send{padding:9px 14px;border-radius:11px;background:var(--surface-3);font-weight:700;font-size:13px;border:1px solid var(--line-2);white-space:nowrap}
+.q.sent{opacity:.6}
+.q.sent .send,.q.muted .send{background:transparent;border-color:transparent;color:var(--faint)}
+.q.sent .send{color:var(--ok)}
+.hint{display:flex;gap:10px;padding:12px 14px;border-radius:var(--r-md);border:1px dashed var(--line-2);color:var(--muted);font-size:12px}
+.hint svg{flex:none;margin-top:1px}
+
+.skel{background:linear-gradient(90deg,var(--surface) 0%,var(--surface-2) 50%,var(--surface) 100%);background-size:200% 100%;border-radius:12px;animation:sh 1.3s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.errcard{padding:18px;border-radius:var(--r-md);background:rgba(255,102,128,.08);border:1px solid rgba(255,102,128,.25);display:flex;flex-direction:column;gap:12px}
+.errcard b{color:var(--bad)}
+.errcard p{margin:0;color:var(--muted);font-size:13px}
+.btn2{align-self:flex-start;padding:9px 14px;border-radius:11px;background:var(--surface-3);font-weight:700;font-size:13px;border:1px solid var(--line-2)}
+
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);opacity:0;z-index:9;background:#221E31;border:1px solid var(--line-2);padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;transition:all .3s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ГЛАВНАЯ -->
+  <section class="screen" id="s-home">
+    <div class="hello">
+      <div><small id="greet">Добрый день</small><b id="hello-name">Главная</b></div>
+      <button class="icon-btn" id="refresh" aria-label="Обновить данные">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+      </button>
+    </div>
+    <div id="home-body"></div>
+  </section>
+
+  <!-- ЧЕКИ -->
+  <section class="screen" id="s-checks" hidden>
+    <button class="back" data-go="home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Главная
+    </button>
+    <h1 class="h1">Неоплаченные чеки</h1>
+    <div>
+      <div class="label">Сеть</div>
+      <div class="seg two" role="group" aria-label="Сеть" id="net">
+        <button aria-pressed="true" data-n="ft">ФТ <em class="cnt">12 таблиц</em></button>
+        <button aria-pressed="false" data-n="r">Рулька <em class="cnt">2 таблицы</em></button>
+      </div>
+    </div>
+    <div>
+      <div class="label">Период</div>
+      <div class="seg" role="group" aria-label="Период" id="seg">
+        <button aria-pressed="true" data-p="week">Неделя</button>
+        <button aria-pressed="false" data-p="prev">Прошлая</button>
+        <button aria-pressed="false" data-p="month">Месяц</button>
+        <button aria-pressed="false" data-p="all">Всё</button>
+      </div>
+      <div class="period-note num" id="pnote">&nbsp;</div>
+    </div>
+    <div>
+      <div class="label">Регион</div>
+      <div class="regions" id="regions"></div>
+    </div>
+    <div id="pv"></div>
+  </section>
+
+  <!-- РАССЫЛКА -->
+  <section class="screen" id="s-send" hidden>
+    <h1 class="h1">Рассылка</h1>
+    <div id="send-body"></div>
+  </section>
+
+  <!-- ИСТОРИЯ -->
+  <section class="screen" id="s-history" hidden>
+    <h1 class="h1">История</h1>
+    <div class="list" id="hist-full"></div>
+  </section>
+</div>
+
+<div class="dock" id="dock" hidden>
+  <div class="dock-in"><button class="cta" id="cta"><i class="prog" id="prog"></i><span id="cta-txt">Сформировать Excel</span></button></div>
+</div>
+
+<nav class="tabs" id="tabs">
+  <div class="tabs-in">
+    <button class="tab" data-go="home" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Главная
+    </button>
+    <button class="tab" data-go="checks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Отчёты
+    </button>
+    <button class="tab" data-go="send">
+      <span class="pip" id="pip" hidden></span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg>Рассылка
+    </button>
+    <button class="tab" data-go="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>История
+    </button>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const tg = window.Telegram && window.Telegram.WebApp;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (tg) {
+    tg.ready(); tg.expand();
+    try { tg.setHeaderColor('#09080F'); tg.setBackgroundColor('#09080F'); tg.setBottomBarColor && tg.setBottomBarColor('#09080F'); } catch (e) {}
+  }
+  const haptic = (t) => { try { t === 'ok' ? tg.HapticFeedback.notificationOccurred('success') : t === 'err' ? tg.HapticFeedback.notificationOccurred('error') : tg.HapticFeedback.selectionChanged(); } catch (e) {} };
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
+  const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
+  const NETS = {ft: 'ФТ', r: 'Рулька'};
+
+  const state = { sums: {}, period: 'week', net: 'ft', region: 'all', batch: null, history: [], loading: {}, building: false };
+
+  /* ---------- API ---------- */
+  async function api(action, body) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(Object.assign({action, initData: tg ? tg.initData : ''}, body || {}))
+    });
+    let j;
+    try { j = await res.json(); } catch (e) { throw new Error('Сервер ответил не JSON. Проверь адрес API_URL и доступ «Все».'); }
+    if (!j.ok) throw new Error(j.error || 'Неизвестная ошибка');
+    return j.data;
+  }
+
+  async function loadSummary(period, fresh) {
+    state.loading[period] = true;
+    if (period === state.period) renderChecks();
+    if (period === 'week') renderHome();
+    try {
+      const d = await api('summary', {period, fresh: !!fresh});
+      state.sums[period] = d.summary;
+      state.batch = d.batch; state.history = d.history || [];
+      if (fresh) Object.keys(state.sums).forEach(k => { if (k !== period) delete state.sums[k]; });
+    } catch (e) {
+      state.sums[period] = {error: e.message};
+    } finally {
+      state.loading[period] = false;
+      renderAll();
+    }
+  }
+
+  /* ---------- ГЛАВНАЯ ---------- */
+  const h = new Date().getHours();
+  $('#greet').textContent = h < 6 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
+  const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (u && u.first_name) $('#hello-name').textContent = u.first_name;
+
+  function renderHome() {
+    const s = state.sums.week;
+    $('#refresh').classList.toggle('spin', !!state.loading.week);
+    if (!tg || !tg.initData) {
+      $('#home-body').innerHTML = '<div class="errcard"><b>Откройте через Telegram</b><p>Приложение работает только внутри бота: нажмите кнопку «Помощник» в чате с ботом.</p></div>';
+      return;
+    }
+    if (!s || (state.loading.week && !s.regions)) {
+      $('#home-body').innerHTML = '<div style="display:flex;flex-direction:column;gap:18px">' +
+        '<div class="skel" style="height:230px;border-radius:24px"></div>' +
+        '<div class="skel" style="height:150px"></div><div class="note">Читаю 14 таблиц… первый раз это до 30 секунд</div></div>';
+      return;
+    }
+    if (s.error) { $('#home-body').innerHTML = errCard(s.error, 'week'); return; }
+
+    const total = s.totals.ft.sum + s.totals.r.sum, count = s.totals.ft.count + s.totals.r.count;
+    let delta = '';
+    if (s.prevTotal) {
+      const p = Math.round((total - s.prevTotal) / s.prevTotal * 100);
+      delta = p === 0 ? '<span class="chip">как прошлые 7 дней</span>'
+        : '<span class="chip ' + (p > 0 ? 'up' : 'down') + ' num">' + (p > 0 ? '▲ ' : '▼ ') + Math.abs(p) + '% к прошлым 7 дням</span>';
+    }
+    const top = s.regions.filter(r => r.sum > 0).sort((a, b) => b.sum - a.sum).slice(0, 5);
+    const mx = top.length ? top[0].sum : 1;
+    const broken = s.regions.filter(r => r.error);
+
+    $('#home-body').innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:18px">' +
+      '<div class="hero"><div class="eyebrow">Не оплачено · ' + esc(s.range.label) + '</div>' +
+        '<div class="big num" id="hero-sum">' + money(total) + '<span>₴</span></div>' +
+        '<div class="hero-meta"><span class="chip num">' + count + ' ' + plural(count, 'чек', 'чека', 'чеков') + '</span>' + delta + '</div>' +
+        spark(s.days) +
+        '<div class="spark-days">' + s.days.map(d => '<span>' + d.label + '</span>').join('') + '</div>' +
+        '<div class="updated">Обновлено в ' + esc(s.updatedAt || '') + ' · ФТ ' + money(s.totals.ft.sum) + ' ₴ · Рулька ' + money(s.totals.r.sum) + ' ₴</div>' +
+      '</div>' +
+      (broken.length ? '<div class="warnbox">Не удалось прочитать: ' + broken.map(r => esc(r.name)).join(', ') + '. Проверь доступ к этим таблицам.</div>' : '') +
+      '<div><div class="sec-h"><h2>Где больше всего</h2><button data-go="checks">Все регионы</button></div><div class="board">' +
+        (top.length ? top.map((r, i) => '<div class="row-bar"><span class="n">' + esc(r.name) + '</span><div class="track"><div class="fill" style="width:' + (r.sum / mx * 100).toFixed(1) + '%;animation-delay:' + i * 80 + 'ms"></div></div><span class="v num">' + money(r.sum) + ' ₴</span></div>').join('')
+          : '<div class="empty">За 7 дней неоплаченных чеков нет</div>') +
+      '</div></div>' +
+      '<div><div class="sec-h"><h2>Модули</h2></div><div class="mods">' +
+        '<button class="mod" data-go="checks">' + (count ? '<span class="badge num">' + count + '</span>' : '') +
+          '<span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>' +
+          '<span><b>Неоплаченные чеки</b><small>ФТ · Рулька · Excel</small></span></button>' +
+        soonMod('Камеры SOS', 'По регионам', 'var(--ember)', '<rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3"/>') +
+        soonMod('Аналитика директору', 'ФТ · Рулька · месяц', 'var(--ok)', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>') +
+        soonMod('Отображение дат', 'Диапазон дат', 'var(--warn)', '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>') +
+      '</div></div>' +
+      '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
+      '</div>';
+    countUp($('#hero-sum'), total);
+  }
+
+  function soonMod(t, sub, color, path) {
+    return '<button class="mod" data-toast="«' + t + '» подключим следующим шагом"><span class="soon">скоро</span>' +
+      '<span class="ic" style="color:' + color + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg></span>' +
+      '<span><b>' + t + '</b><small>' + sub + '</small></span></button>';
+  }
+
+  function spark(days) {
+    const W = 320, H = 70, pad = 8, max = Math.max(1, ...days.map(d => d.sum)) * 1.1;
+    const pts = days.map((d, i) => [pad + i * (W - 2 * pad) / Math.max(1, days.length - 1), H - 6 - (d.sum / max) * (H - 14)]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    const last = pts[pts.length - 1];
+    return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Сумма по дням">' +
+      '<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D66BF0" stop-opacity=".35"/><stop offset="1" stop-color="#D66BF0" stop-opacity="0"/></linearGradient></defs>' +
+      [0.33, 0.66].map(y => '<line x1="0" x2="' + W + '" y1="' + H * y + '" y2="' + H * y + '" stroke="rgba(236,230,255,.06)"/>').join('') +
+      '<path d="' + line + ' L' + last[0] + ' ' + H + ' L' + pts[0][0] + ' ' + H + ' Z" fill="url(#sg)"/>' +
+      '<path d="' + line + '" fill="none" stroke="#D66BF0" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="4" fill="#F3F0FB" stroke="#D66BF0" stroke-width="2"/></svg>';
+  }
+
+  function countUp(el, to) {
+    if (!el || reduce) return;
+    const t0 = performance.now(), dur = 900;
+    (function step(t) {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.firstChild.nodeValue = money(to * e); if (k < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+
+  function errCard(msg, period) {
+    return '<div class="errcard"><b>Не получилось загрузить данные</b><p>' + esc(msg) + '</p>' +
+      '<button class="btn2" data-retry="' + period + '">Повторить</button></div>';
+  }
+
+  /* ---------- ИСТОРИЯ ---------- */
+  const DOT = {ok: 'var(--ok)', warn: 'var(--warn)', error: 'var(--bad)'};
+  function histItems(n) {
+    const list = n ? state.history.slice(0, n) : state.history;
+    if (!list.length) return '<div class="empty">Пока ничего не запускали</div>';
+    return list.map(x => '<div class="li"><span class="dot" style="background:' + (DOT[x.status] || 'var(--faint)') + '"></span><div><b>' + esc(x.title) + '</b><small>' + esc(x.text) + '</small></div><time>' + esc(x.at) + '</time></div>').join('');
+  }
+
+  /* ---------- ЧЕКИ ---------- */
+  const PERIOD_HINT = {week: 'последние 7 дней', prev: '7 дней до этого', month: 'с 1-го числа', all: 'все даты в таблицах'};
+  function renderChecks() {
+    const s = state.sums[state.period];
+    const loading = state.loading[state.period] || !s;
+    $('#pnote').textContent = s && s.range ? s.range.label : PERIOD_HINT[state.period];
+    document.querySelectorAll('#seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p === state.period));
+    document.querySelectorAll('#net button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === state.net));
+
+    if (loading) {
+      $('#regions').innerHTML = Array.from({length: state.net === 'ft' ? 12 : 2}, (_, i) => '<span class="skel" style="width:' + (70 + (i * 17) % 50) + 'px;height:36px"></span>').join('');
+      $('#pv').innerHTML = '<div class="skel" style="height:220px"></div>';
+      $('#cta').disabled = true;
+      return;
+    }
+    if (s.error) { $('#regions').innerHTML = ''; $('#pv').innerHTML = errCard(s.error, state.period); $('#cta').disabled = true; return; }
+
+    const regs = s.regions.filter(r => r.net === state.net);
+    if (state.region !== 'all' && !regs.some(r => r.key === state.region)) state.region = 'all';
+    const tot = s.totals[state.net];
+    $('#regions').innerHTML =
+      '<button class="reg" data-r="all" aria-pressed="' + (state.region === 'all') + '">' + (state.net === 'ft' ? 'Все ФТ' : 'Обе Рульки') + ' <em class="num">' + tot.count + '</em></button>' +
+      regs.map(r => '<button class="reg' + (r.error ? ' err' : '') + '" data-r="' + r.key + '" aria-pressed="' + (state.region === r.key) + '">' + esc(r.name) + ' <em class="num">' + (r.error ? '!' : r.count) + '</em></button>').join('');
+
+    const sel = state.region === 'all' ? null : regs.find(r => r.key === state.region);
+    const rows = sel ? sel.preview : regs.flatMap(r => r.preview).sort((a, b) => cmpDate(b.date, a.date)).slice(0, 3);
+    const count = sel ? sel.count : tot.count, sum = sel ? sel.sum : tot.sum;
+    const title = sel ? sel.name : (state.net === 'ft' ? 'Все ФТ · 12 файлов' : 'Рулька · 2 файла');
+    const errs = (sel ? [sel] : regs).filter(r => r.error);
+
+    $('#pv').innerHTML =
+      (errs.length ? '<div class="warnbox" style="margin-bottom:12px">' + errs.map(r => esc(r.name) + ': ' + esc(r.error)).join('<br>') + '</div>' : '') +
+      '<div class="preview"><div class="pv-top"><b>' + esc(title) + '</b><span class="num">' + count + ' ' + plural(count, 'строка', 'строки', 'строк') + '</span></div>' +
+      (rows.length ? rows.map(x => '<div class="pv-row"><span class="tt">' + esc(x.tt) + '</span><span class="sum num">' + money(x.sum) + '</span><span class="fab">' + esc(x.fab) + '</span><span class="d num">' + esc(x.date) + '</span></div>').join('')
+        : '<div class="empty">За этот период неоплаченных чеков нет</div>') +
+      '<div class="pv-foot"><span>Итого</span><span class="num">' + money(sum) + ' ₴</span></div></div>' +
+      '<div class="note" style="margin-top:10px">Показаны 3 последние строки. В Excel попадут все ' + count + '.</div>';
+    if (!state.building) {
+      $('#cta').disabled = count === 0;
+      $('#cta-txt').textContent = count === 0 ? 'Нет чеков за период' : (sel ? 'Сформировать Excel' : 'Сформировать ' + regs.filter(r => r.count).length + ' ' + plural(regs.filter(r => r.count).length, 'файл', 'файла', 'файлов'));
+    }
+  }
+  const cmpDate = (a, b) => a.split('.').reverse().join('').localeCompare(b.split('.').reverse().join(''));
+
+  $('#net').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.net = b.dataset.n; state.region = 'all'; haptic(); renderChecks(); });
+  $('#seg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.period = b.dataset.p; haptic();
+    if (!state.sums[state.period] || state.sums[state.period].error) loadSummary(state.period); else renderChecks();
+  });
+  $('#regions').addEventListener('click', e => { const b = e.target.closest('.reg'); if (!b) return; state.region = b.dataset.r; haptic(); renderChecks(); });
+
+  $('#cta').addEventListener('click', async () => {
+    if (state.building) return;
+    state.building = true; $('#cta').disabled = true;
+    const s = state.sums[state.period];
+    const n = state.region === 'all' ? s.regions.filter(r => r.net === state.net && r.count).length : 1;
+    const est = Math.max(6, n * 5) * 1000, t0 = Date.now();
+    $('#cta-txt').textContent = 'Собираю ' + n + ' ' + plural(n, 'файл', 'файла', 'файлов') + '…';
+    const iv = setInterval(() => { $('#prog').style.width = Math.min(92, (Date.now() - t0) / est * 92) + '%'; }, 300);
+    try {
+      const d = await api('build', {net: state.net, region: state.region, period: state.period});
+      state.batch = d.batch; state.history = d.history;
+      $('#prog').style.width = '100%'; haptic('ok');
+      toast('Готово. Файлы пришли в чат с ботом');
+      setTimeout(() => go('send'), 400);
+    } catch (e) {
+      haptic('err'); toast(e.message);
+    } finally {
+      clearInterval(iv); state.building = false;
+      setTimeout(() => { $('#prog').style.width = '0'; renderChecks(); }, 500);
+    }
+  });
+
+  /* ---------- РАССЫЛКА ---------- */
+  function renderSend() {
+    const b = state.batch;
+    const items = b ? Object.values(b.items) : [];
+    const ready = items.filter(i => i.preparedId);
+    const left = ready.filter(i => !i.sent).length;
+    $('#pip').hidden = !left; $('#pip').textContent = left;
+
+    if (!items.length) {
+      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в модуле чеков.</div></div>' +
+        '<button class="btn2" data-go="checks" style="margin-top:14px">Открыть чеки</button>';
+      return;
+    }
+    const now = Date.now() / 1000;
+    const done = ready.filter(i => i.sent).length, C = 251.3, frac = ready.length ? done / ready.length : 0;
+    const item = i => {
+      let cls = '', btn, meta = '<small class="num">' + i.count + ' стр. · ' + money(i.sum) + ' ₴</small>';
+      if (i.error) { cls = ' muted'; btn = '<button class="send" disabled>Ошибка</button>'; meta = '<small class="err">' + esc(i.error) + '</small>'; }
+      else if (i.empty) { cls = ' muted'; btn = '<button class="send" disabled>Нет чеков</button>'; }
+      else if (i.sent) { cls = ' sent'; btn = '<button class="send" disabled>✓ Ушло</button>'; }
+      else if (i.expires && i.expires < now) { cls = ' muted'; btn = '<button class="send" disabled>Истёк</button>'; meta = '<small class="err">Сформируй заново</small>'; }
+      else btn = '<button class="send" data-send="' + i.key + '">Отправить</button>';
+      return '<div class="q' + cls + '"><span class="xl">XLSX</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
+    };
+    const group = net => {
+      const g = items.filter(i => i.net === net); if (!g.length) return '';
+      const r = g.filter(i => i.preparedId);
+      return '<div class="qh">' + NETS[net] + ' <span class="num">' + r.filter(i => i.sent).length + ' из ' + r.length + '</span></div>' + g.map(item).join('');
+    };
+    $('#send-body').innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:14px">' +
+      '<div class="ring-card"><svg class="ring" viewBox="0 0 100 100" aria-hidden="true">' +
+        '<defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs>' +
+        '<circle class="bgc" cx="50" cy="50" r="40"/><circle class="fg" cx="50" cy="50" r="40" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 50 50)"/>' +
+        '<text x="50" y="57" text-anchor="middle">' + done + '/' + ready.length + '</text></svg>' +
+        '<div><b>Чеки · ' + esc(b.period.label) + '</b><p>' + (left ? 'Осталось ' + left + '. Нажми «Отправить» и выбери группу региона.' : 'Все файлы отправлены.') + '</p></div></div>' +
+      '<div class="queue">' + group('ft') + group('r') + '</div>' +
+      '<div class="hint"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>' +
+        '<span>Файл уходит от тебя с пометкой «via бот». Копии всех файлов лежат в чате с ботом: если группа не принимает сообщения через ботов, просто перешли файл оттуда.</span></div>' +
+      '</div>';
+  }
+
+  $('#send-body').addEventListener('click', e => {
+    const b = e.target.closest('[data-send]'); if (!b) return;
+    const it = state.batch.items[b.dataset.send];
+    if (!tg || !tg.shareMessage || !tg.isVersionAtLeast('8.0')) { toast('Обнови Telegram: нужна версия с поддержкой отправки из приложений'); return; }
+    haptic();
+    tg.shareMessage(it.preparedId, async ok => {
+      if (!ok) return;
+      it.sent = true; renderSend(); haptic('ok'); toast('Отправлено: ' + it.name);
+      try { const d = await api('markSent', {key: it.key}); state.batch = d.batch; state.history = d.history; renderSend(); } catch (err) {}
+    });
+  });
+
+  /* ---------- Навигация ---------- */
+  const SCREENS = {home: 's-home', checks: 's-checks', send: 's-send', history: 's-history'};
+  let current = 'home';
+  function go(key) {
+    current = key;
+    Object.entries(SCREENS).forEach(([k, id]) => {
+      const el = document.getElementById(id), on = k === key;
+      el.hidden = !on;
+      if (on) { el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
+    });
+    document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
+    $('#dock').hidden = key !== 'checks';
+    $('#tabs').hidden = key === 'checks';
+    if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
+    window.scrollTo(0, 0);
+    if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
+    renderAll();
+  }
+  if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
+
+  function renderAll() {
+    renderHome(); renderChecks(); renderSend();
+    $('#hist-full').innerHTML = histItems(0);
+  }
+
+  document.addEventListener('click', e => {
+    const g = e.target.closest('[data-go]'); if (g) { haptic(); go(g.dataset.go); return; }
+    const r = e.target.closest('[data-retry]'); if (r) { loadSummary(r.dataset.retry, true); return; }
+    const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
+  });
+  $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
+
+  let tt;
+  function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
+
+  renderAll();
+  if (tg && tg.initData) loadSummary('week');
+})();
+</script>
+</body>
+</html>
