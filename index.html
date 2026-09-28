@@ -983,10 +983,11 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       if (T.err) { body.innerHTML = errCard(T.err, 'tt'); return; }
       if (!T.overview) { body.innerHTML = '<div class="skel" style="height:300px"></div><div class="note" style="margin-top:10px">Читаю справочник…</div>'; return; }
       const card = r => '<button class="tt-card" data-reg="' + r.key + '">' + (r.pending ? '<span class="badge num">' + r.pending + '</span>' : '') +
-        '<b>' + esc(r.name) + '</b><small>' + r.tt + ' ТТ · ' + r.ops + ' ' + plural(r.ops, 'оператор', 'оператора', 'операторов') + '</small></button>';
+        '<b>' + esc(r.label || r.name) + '</b><small>' + r.tt + ' ТТ · ' + r.ops + ' ' + plural(r.ops, 'оператор', 'оператора', 'операторов') + '</small></button>';
       body.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' +
-        '<div><div class="label">ФТ</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'ft').map(card).join('') + '</div></div>' +
-        '<div><div class="label">Рулька</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'r').map(card).join('') + '</div></div></div>';
+        '<div><div class="label">ФТ</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'ft' && !r.test).map(card).join('') + '</div></div>' +
+        '<div><div class="label">Рулька</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'r' && !r.test).map(card).join('') + '</div></div>' +
+        (T.overview.some(r => r.test) ? '<div><div class="label">Тест (копии — живые таблицы не меняются)</div><div class="tt-grid">' + T.overview.filter(r => r.test).map(card).join('') + '</div></div>' : '') + '</div>';
       return;
     }
     const d = T.data[T.region];
@@ -1038,6 +1039,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
     body.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
       '<div class="seg two" id="tt-tab"><button data-tab="tt" aria-pressed="' + (T.tab === 'tt') + '">ТТ</button><button data-tab="ops" aria-pressed="' + (T.tab === 'ops') + '">Операторы</button></div>' +
+      (d.test ? '<div class="warnbox">Тестовая копия: изменения пишутся только в копию таблицы и копию справочника.</div>' : '') +
       (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + list +
       (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
       '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
