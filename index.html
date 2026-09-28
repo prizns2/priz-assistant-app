@@ -1027,8 +1027,10 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="btn2" data-tt="form" data-op="addOp">+ Добавить оператора</button>' +
         (T.form && T.form.op === 'addOp' ? ttFormHtml(d) : '') +
         '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(o =>
-          '<div class="tt-row' + (o.working ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>не работает с ' + esc(o.to) + '</small>' : '') +
-            (o.working ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Уволить</button></div>' : '') +
+          '<div class="tt-row' + (o.working || o.inLists ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>не работает с ' + esc(o.to) + '</small>' : '') +
+            (!o.working && o.inLists ? '<span class="chip">ещё в выпадающих списках таблицы</span>' : '') +
+            (o.working ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Уволить</button></div>'
+              : o.inLists ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Убрать из списков таблицы</button></div>' : '') +
             (T.form && T.form.fio === o.fio && T.form.op === 'fireOp' ? ttFormHtml(d) : '') + '</div>').join('') : '<div class="empty">Никого нет</div>') + '</div>';
     }
     body.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
