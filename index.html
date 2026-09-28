@@ -337,6 +337,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     </div>
     <button class="btn2" id="dt-reset">Снять фильтр дат</button>
     <div id="dt-result"></div>
+    <div id="mp"></div>
   </section>
 
   <!-- ТТ И ОПЕРАТОРЫ -->
@@ -400,7 +401,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 29';
+  const APP_VERSION = '29.09 · 30';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -857,7 +858,54 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   }
   const dtKeys = () => D.region === 'all' ? D.tables.filter(x => x.net === D.net).map(x => x.key) : [D.region];
 
+  /* Новый месяц: проверка дат и счётчики по операторам */
+  const MP = { st: null, key: null, month: null, busy: false, res: null };
+  async function loadMonth() {
+    try { MP.st = (await api('monthState')).month; MP.month = MP.month || MP.st.month;
+      if (!MP.key) MP.key = (MP.st.tables.find(t => t.test) || MP.st.tables[0]).key; }
+    catch (e) { MP.err = e.message; }
+    renderMonth();
+  }
+  function renderMonth() {
+    const el = $('#mp'); if (!el) return;
+    if (!MP.st) { el.innerHTML = MP.err ? '<div class="warnbox">' + esc(MP.err) + '</div>' : ''; return; }
+    const t = MP.st.tables.find(x => x.key === MP.key) || {};
+    const canApply = MP.st.live || t.test;
+    const chip = x => '<button class="reg" data-mpk="' + x.key + '" aria-pressed="' + (x.key === MP.key) + '">' + esc(x.name) + '</button>';
+    const r = MP.res;
+    el.innerHTML = '<div class="qh" style="margin:6px 0 8px">Новый месяц в таблицах</div>' +
+      '<div class="note" style="margin:0 0 10px">После последней записи: проверка дат на месяц и счётчики по операторам. Прошлые месяцы не меняются. ' +
+        (MP.st.live ? 'Автоматически 1-го числа в 00:05.' : '<b>Пока только тестовая копия</b> — живые таблицы и автозапуск включу после проверки.') + '</div>' +
+      '<div class="regions" style="margin-bottom:8px">' + MP.st.months.map(m => '<button class="reg" data-mpm="' + m + '" aria-pressed="' + (m === MP.month) + '">' + monthLabel(m) + '</button>').join('') + '</div>' +
+      '<div class="regions" style="margin-bottom:10px">' + MP.st.tables.filter(x => x.test).map(chip).join('') + MP.st.tables.filter(x => !x.test).map(chip).join('') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="send" data-mpa="apply"' + (canApply && !MP.busy ? '' : ' disabled') + '>' + (MP.busy === 'apply' ? 'Готовлю…' : 'Подготовить') + '</button>' +
+        '<button class="btn2" data-mpa="check"' + (MP.busy ? ' disabled' : '') + '>' + (MP.busy === 'check' ? 'Смотрю…' : 'Что будет сделано') + '</button></div>' +
+      (r ? '<div class="preview" style="padding:12px 14px;margin-top:10px;display:flex;flex-direction:column;gap:8px">' +
+        '<div class="pv-top" style="padding:0"><b>' + esc(r.name) + ' · ' + esc(r.month) + '</b><span>' + (r.apply ? 'сделано' : 'только просмотр') + '</span></div>' +
+        r.sheets.map(x => '<div style="border-top:1px solid var(--line);padding-top:8px"><b style="font-size:14px">' + esc(x.sheet) + '</b>' +
+          (x.error ? '<div class="note err" style="margin:2px 0 0">' + esc(x.error) + '</div>' : x.skip ? '<div class="note" style="margin:2px 0 0">' + esc(x.skip) + '</div>' :
+            '<div class="note" style="margin:2px 0 0">Месяц со строки ' + x.start + ' · проверка ' + esc(x.validation) +
+              (x.addRows ? '<br>+' + x.addRows + ' строк в конец листа' : '') +
+              (x.counters ? '<br>Счётчики: ' + esc(x.counters) : '') +
+              (x.notes || []).map(n => '<br>' + esc(n)).join('') + '</div>') + '</div>').join('') +
+        '<button class="btn2" data-open="' + esc(r.url) + '">Открыть таблицу</button></div>' : '');
+  }
+  $('#mp').addEventListener('click', async e => {
+    const k = e.target.closest('[data-mpk]'); if (k) { MP.key = k.dataset.mpk; MP.res = null; haptic(); renderMonth(); return; }
+    const m = e.target.closest('[data-mpm]'); if (m) { MP.month = m.dataset.mpm; MP.res = null; haptic(); renderMonth(); return; }
+    const a = e.target.closest('[data-mpa]'); if (!a || MP.busy) return;
+    MP.busy = a.dataset.mpa; MP.res = null; renderMonth(); haptic();
+    try {
+      MP.res = (await api('monthRun', {region: MP.key, month: MP.month, apply: MP.busy === 'apply'})).month;
+      const bad = MP.res.sheets.filter(x => x.error).length;
+      haptic(bad ? 'err' : 'ok'); if (MP.res.apply) toast(bad ? 'Готово, но с ошибками: ' + bad : 'Готово. Открой таблицу и проверь');
+    } catch (err) { haptic('err'); toast(err.message); }
+    MP.busy = false; renderMonth();
+  });
+
   async function loadDates() {
+    if (!MP.st) loadMonth();
     try { const d = await api('datesState'); D.tables = d.dates.tables; D.state = d.dates.state || {}; D.loaded = true; applyState(d); }
     catch (e) { toast(e.message); }
     renderDates();
