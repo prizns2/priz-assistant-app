@@ -400,7 +400,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '28.09 · 27';
+  const APP_VERSION = '29.09 · 28';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -958,21 +958,13 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     if (f.op === 'rename') fields = ttField('newName', 'Новое название', 'text', f.newName);
     if (f.op === 'addOp') fields = ttField('fio', 'ФИО оператора', 'text', f.fio);
     if (f.op !== 'open') fields += ttField('date', f.op === 'fireOp' ? 'Не работает с' : f.op === 'close' ? 'Закрыта с' : 'С даты', 'date', f.date);
-    const p = T.plan;
-    const plan = !p ? '' : '<div class="preview" style="margin-top:4px"><div class="pv-top"><b>План · ' + esc(p.title) + '</b><span>' + p.steps.length + ' ' + plural(p.steps.length, 'изменение', 'изменения', 'изменений') + '</span></div>' +
-      '<div style="padding:0 14px 10px"><div class="note" style="margin:8px 0">' + esc(p.summary) + (p.scheduled ? ' · <b>выполнится ' + esc(p.dateLabel) + '</b>' : '') + '</div>' +
-      p.steps.map(s => '<div class="tt-step"><em>' + (s.target === 'ref' ? 'справочник' : 'таблица') + '</em><span>' + esc(s.sheet) + '!' + esc(s.a1) + ' · ' + esc(s.note) + '</span>' +
-        '<span></span><span>' + (s.beforeText ? '<s>' + esc(s.beforeText) + '</s> → ' : '') + '<b>' + esc(s.afterText || '(пусто)') + '</b></span></div>').join('') +
-      (p.warnings.length ? '<div class="warnbox" style="margin-top:8px">' + p.warnings.map(esc).join('<br>') + '</div>' : '') + '</div></div>';
-    const canApply = p && d.writeEnabled;
+    // Сразу «Применить»: сервер сам пересчитывает изменения по живым данным перед записью
     return '<div class="tt-form" id="tt-form"><div><b>' + esc(OP_LABEL[f.op]) + '</b> ' + who + '</div>' + fields +
       (d.managers.length ? '<datalist id="tt-mgrs">' + d.managers.map(m => '<option value="' + esc(m) + '">').join('') + '</datalist>' : '') +
-      plan +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn2" data-tt="plan"' + (T.busy ? ' disabled' : '') + '>' + (p ? 'Пересчитать план' : 'Показать план') + '</button>' +
-        (p ? '<button class="send" data-tt="apply"' + (canApply && !T.busy ? '' : ' disabled') + '>' + (p.scheduled ? 'Запланировать' : 'Применить') + '</button>' : '') +
-        '<button class="btn2" data-tt="cancel">Отмена</button></div>' +
-      (p && !d.writeEnabled ? '<div class="note">Запись в таблицы пока выключена — сейчас только план. Включу после подтверждения.</div>' : '') +
+        '<button class="send" data-tt="apply"' + (d.writeEnabled && !T.busy ? '' : ' disabled') + '>' + (T.busy ? 'Применяю…' : 'Применить') + '</button>' +
+        '<button class="btn2" data-tt="cancel"' + (T.busy ? ' disabled' : '') + '>Отмена</button></div>' +
+      (!d.writeEnabled ? '<div class="note">Запись в таблицы выключена.</div>' : '') +
       '</div>';
   }
 
@@ -1040,6 +1032,9 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     body.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
       '<div class="seg two" id="tt-tab"><button data-tab="tt" aria-pressed="' + (T.tab === 'tt') + '">ТТ</button><button data-tab="ops" aria-pressed="' + (T.tab === 'ops') + '">Операторы</button></div>' +
       (d.test ? '<div class="warnbox">Тестовая копия: изменения пишутся только в копию таблицы и копию справочника.</div>' : '') +
+      (T.notice ? '<div class="preview" style="padding:12px 14px"><b>' + esc(T.notice.text) + '</b>' +
+        (T.notice.warnings.length ? '<div class="warnbox" style="margin-top:8px">' + T.notice.warnings.map(esc).join('<br>') + '</div>' : '') +
+        '<button class="btn2" data-tt="dismiss" style="margin-top:8px">Понятно</button></div>' : '') +
       (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + list +
       (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
       '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
@@ -1054,7 +1049,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   $('#tt-back').addEventListener('click', () => {
     haptic();
-    if (T.region) { T.region = null; T.form = null; T.plan = null; T.open = null; T.err = ''; renderTt(); if (!T.overview) loadTtOverview(); }
+    if (T.region) { T.region = null; T.form = null; T.plan = null; T.open = null; T.notice = null; T.err = ''; renderTt(); if (!T.overview) loadTtOverview(); }
     else go('home');
   });
   $('#tt-body').addEventListener('input', e => {
@@ -1063,7 +1058,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
   $('#tt-body').addEventListener('click', async e => {
     const reg = e.target.closest('[data-reg]');
-    if (reg) { haptic(); T.region = reg.dataset.reg; T.tab = 'tt'; T.filter = 'active'; T.q = ''; T.form = null; T.plan = null; T.open = null;
+    if (reg) { haptic(); T.region = reg.dataset.reg; T.tab = 'tt'; T.filter = 'active'; T.q = ''; T.form = null; T.plan = null; T.open = null; T.notice = null;
       renderTt(); loadTtRegion(T.region, !!T.data[T.region]); return; }
     const tab = e.target.closest('[data-tab]'); if (tab) { T.tab = tab.dataset.tab; T.filter = 'active'; T.q = ''; T.form = null; T.plan = null; haptic(); renderTt(); return; }
     const f = e.target.closest('#tt-filter [data-f]'); if (f) { T.filter = f.dataset.f; haptic(); renderTt(); return; }
@@ -1081,20 +1076,18 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       T.plan = null; renderTt(); return;
     }
     if (act === 'cancel') { T.form = null; T.plan = null; renderTt(); return; }
+    if (act === 'dismiss') { T.notice = null; renderTt(); return; }
     ttReadForm();
-    if (act === 'plan') {
-      T.busy = true; T.err = ''; renderTt();
-      try { T.plan = (await api('ttPlan', {body: ttReq()})).plan; haptic('ok'); }
-      catch (err) { haptic('err'); toast(err.message); }
-      T.busy = false; renderTt(); return;
-    }
     if (act === 'apply') {
-      T.busy = true; renderTt();
+      if (T.busy) return;
+      T.busy = true; T.notice = null; renderTt();
       try {
         const d = await api('ttApply', {body: ttReq()});
         T.data[T.region] = d.region; T.overview = null;
-        toast(d.result.scheduled ? 'Запланировано на ' + d.result.plan.dateLabel : 'Готово: ' + d.result.plan.summary);
+        const p = d.result.plan;
+        T.notice = {text: (d.result.scheduled ? 'Запланировано на ' + p.dateLabel + ': ' : 'Готово: ') + p.summary, warnings: p.warnings || []};
         haptic('ok'); T.form = null; T.plan = null;
+        window.scrollTo(0, 0);
       } catch (err) { haptic('err'); toast(err.message); }
       T.busy = false; renderTt();
     }
