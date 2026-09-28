@@ -359,6 +359,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   <section class="screen" id="s-history" hidden>
     <h1 class="h1">История</h1>
     <div class="list" id="hist-full"></div>
+    <button class="btn2" id="hist-clear">Очистить историю</button>
+    <div class="note">Удаляется только этот список запусков. Файлы в «Рассылке» и таблицы не трогаются.</div>
   </section>
 </div>
 
@@ -401,7 +403,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 31';
+  const APP_VERSION = '29.09 · 32';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -1293,6 +1295,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     renderAll();
   }
   if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
+
+  $('#hist-clear').addEventListener('click', async () => {
+    if (!state.history.length) { toast('История уже пустая'); return; }
+    const q = 'Очистить историю запусков?';
+    const ok = await new Promise(res => tg && tg.showConfirm ? tg.showConfirm(q, res) : res(confirm(q)));
+    if (!ok) return;
+    try { applyState(await api('clearHistory')); saveLocal(); renderAll(); haptic('ok'); toast('История очищена'); }
+    catch (e) { haptic('err'); toast(e.message); }
+  });
 
   function renderAll() {
     renderHome(); renderChecks(); renderSos(); renderAn(); renderDates(); renderTt(); renderSend();
