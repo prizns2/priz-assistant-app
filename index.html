@@ -1030,7 +1030,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<div class="note">Выпадающие списки в таблице: ' + esc((d.opLists || []).join('; ') || 'не найдены') + '</div>' +
         (T.form && T.form.op === 'addOp' ? ttFormHtml(d) : '') +
         '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(o =>
-          '<div class="tt-row' + (o.working || o.inLists ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>не работает с ' + esc(o.to) + '</small>' : '') +
+          '<div class="tt-row' + (o.working || o.inLists ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>последний рабочий день ' + esc(o.to) + '</small>' : '') +
             (!o.working && o.inLists ? '<span class="chip">ещё в выпадающих списках таблицы</span>' : '') +
             (o.working ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Уволить</button></div>'
               : o.inLists ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Убрать из списков таблицы</button></div>' : '') +
