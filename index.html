@@ -1027,8 +1027,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="btn2" data-tt="form" data-op="addOp">+ Добавить оператора</button>' +
         (T.form && T.form.op === 'addOp' ? ttFormHtml(d) : '') +
         '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(o =>
-          '<div class="tt-row' + (o.working ? '' : ' off') + '"><b>' + esc(o.fio) + '</b><small>' + (o.count ? o.count + ' записей в сентябре · последняя ' + esc(o.last) : 'записей нет') +
-            (o.to ? ' · не работает с ' + esc(o.to) : '') + '</small>' +
+          '<div class="tt-row' + (o.working ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>не работает с ' + esc(o.to) + '</small>' : '') +
             (o.working ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Уволить</button></div>' : '') +
             (T.form && T.form.fio === o.fio && T.form.op === 'fireOp' ? ttFormHtml(d) : '') + '</div>').join('') : '<div class="empty">Никого нет</div>') + '</div>';
     }
@@ -1036,7 +1035,6 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       '<div class="seg two" id="tt-tab"><button data-tab="tt" aria-pressed="' + (T.tab === 'tt') + '">ТТ</button><button data-tab="ops" aria-pressed="' + (T.tab === 'ops') + '">Операторы</button></div>' +
       (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + list +
       (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
-      '<div><div class="qh">Журнал изменений</div><div class="list">' + (d.log.length ? d.log.map(l => '<div class="li"><span class="dot" style="background:var(--ok)"></span><div><b>' + esc(l.what) + '</b><small>' + esc([l.before, l.after].filter(String).join(' → ')) + (l.who ? ' · ' + esc(l.who) : '') + '</small></div><time>' + esc(l.at.slice(0, 5)) + '</time></div>').join('') : '<div class="empty">Изменений пока не было</div>') + '</div></div>' +
       '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
     if (T.keepFocus) { const i = $('#tt-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } T.keepFocus = false; }
   }
