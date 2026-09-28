@@ -401,7 +401,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 30';
+  const APP_VERSION = '29.09 · 31';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -875,7 +875,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const r = MP.res;
     el.innerHTML = '<div class="qh" style="margin:6px 0 8px">Новый месяц в таблицах</div>' +
       '<div class="note" style="margin:0 0 10px">После последней записи: проверка дат на месяц и счётчики по операторам. Прошлые месяцы не меняются. ' +
-        (MP.st.live ? 'Автоматически 1-го числа в 00:05.' : '<b>Пока только тестовая копия</b> — живые таблицы и автозапуск включу после проверки.') + '</div>' +
+        (MP.st.live ? 'Автоматически 1-го числа в 00:30 во всех таблицах, отчёт — в бот.' : '<b>Пока только тестовая копия</b> — живые таблицы и автозапуск включу после проверки.') + '</div>' +
       '<div class="regions" style="margin-bottom:8px">' + MP.st.months.map(m => '<button class="reg" data-mpm="' + m + '" aria-pressed="' + (m === MP.month) + '">' + monthLabel(m) + '</button>').join('') + '</div>' +
       '<div class="regions" style="margin-bottom:10px">' + MP.st.tables.filter(x => x.test).map(chip).join('') + MP.st.tables.filter(x => !x.test).map(chip).join('') + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -895,6 +895,12 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const k = e.target.closest('[data-mpk]'); if (k) { MP.key = k.dataset.mpk; MP.res = null; haptic(); renderMonth(); return; }
     const m = e.target.closest('[data-mpm]'); if (m) { MP.month = m.dataset.mpm; MP.res = null; haptic(); renderMonth(); return; }
     const a = e.target.closest('[data-mpa]'); if (!a || MP.busy) return;
+    const tb = MP.st.tables.find(x => x.key === MP.key) || {};
+    if (a.dataset.mpa === 'apply' && !tb.test && MP.month > MP.st.months[0]) {
+      const q = 'Сейчас ещё ' + monthLabel(MP.st.months[0]) + '. После подготовки ' + monthLabel(MP.month) + ' операторы не смогут вносить записи текущего месяца ниже последней. Это и так сделается само 1-го числа в 00:30. Всё равно подготовить?';
+      const ok = await new Promise(res => tg && tg.showConfirm ? tg.showConfirm(q, res) : res(confirm(q)));
+      if (!ok) return;
+    }
     MP.busy = a.dataset.mpa; MP.res = null; renderMonth(); haptic();
     try {
       MP.res = (await api('monthRun', {region: MP.key, month: MP.month, apply: MP.busy === 'apply'})).month;
