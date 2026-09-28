@@ -186,6 +186,27 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 .dt-row b{display:block;font-size:14px}
 .dt-row small{color:var(--muted);font-size:12px}
 .dt-row small.err{color:var(--warn)}
+.tt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tt-card{padding:12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);text-align:left;position:relative}
+.tt-card b{display:block;font-size:14px}
+.tt-card small{display:block;color:var(--muted);font:500 11px var(--mono);margin-top:4px}
+.tt-card .badge{position:absolute;top:8px;right:8px}
+.tt-search{width:100%;padding:11px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);color:var(--text);font:500 14px var(--body)}
+.tt-row{padding:11px 12px;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);text-align:left;width:100%;display:block}
+.tt-row b{display:block;font-size:14px}
+.tt-row small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.tt-row .chip{margin-top:6px;display:inline-block}
+.tt-row.off{opacity:.6}
+.tt-open{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.tt-hist{font:500 12px var(--mono);color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.tt-acts{display:flex;flex-wrap:wrap;gap:6px}
+.tt-form{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--line-2)}
+.tt-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+.tt-form input{padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);color:var(--text);font:500 14px var(--body);color-scheme:dark;text-transform:none;letter-spacing:0}
+.tt-step{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 0;border-top:1px solid var(--line);font-size:12px}
+.tt-step em{font-style:normal;font:600 11px var(--mono);color:var(--faint)}
+.tt-step s{color:var(--faint)}
+.tt-step b{font-weight:600}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-20px);opacity:0;z-index:9;background:#221E31;border:1px solid var(--line-2);padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;transition:all .3s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 </style>
@@ -316,6 +337,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     </div>
     <button class="btn2" id="dt-reset">Снять фильтр дат</button>
     <div id="dt-result"></div>
+  </section>
+
+  <!-- ТТ И ОПЕРАТОРЫ -->
+  <section class="screen" id="s-tt" hidden>
+    <button class="back" id="tt-back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg><span id="tt-back-txt">Главная</span>
+    </button>
+    <h1 class="h1" id="tt-title">ТТ и операторы</h1>
+    <div id="tt-body"></div>
   </section>
 
   <!-- РАССЫЛКА -->
@@ -494,6 +524,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<span><b>Аналитика директору</b><small>ФТ · Рулька · месяц · Word</small></span></button>' +
         '<button class="mod" data-go="dates"><span class="ic" style="color:var(--warn)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>' +
           '<span><b>Отображение дат</b><small>Фильтр в таблицах · 1 нажатие</small></span></button>' +
+        '<button class="mod" data-go="tt"><span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/></svg></span>' +
+          '<span><b>ТТ и операторы</b><small>13 регионов · менеджеры · операторы</small></span></button>' +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
       '</div>';
@@ -892,6 +924,177 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     haptic(); if (tg && tg.openLink) tg.openLink(o.dataset.open); else window.open(o.dataset.open, '_blank');
   });
 
+  /* ---------- ТТ И ОПЕРАТОРЫ ---------- */
+  const T = { overview: null, loading: false, region: null, data: {}, tab: 'tt', q: '', filter: 'active', open: null,
+              form: null, plan: null, busy: false, err: '' };
+  const isoToday = () => iso(new Date());
+  const OP_LABEL = {addTt: 'Добавить ТТ', manager: 'Сменить менеджера', close: 'Закрыть ТТ', open: 'Открыть ТТ',
+                    rename: 'Переименовать ТТ', addOp: 'Добавить оператора', fireOp: 'Уволить оператора'};
+
+  async function loadTtOverview() {
+    T.loading = true; T.err = ''; renderTt();
+    try { T.overview = (await api('ttOverview')).regions; } catch (e) { T.err = e.message; }
+    T.loading = false; renderTt();
+  }
+  async function loadTtRegion(key, quiet) {
+    if (!quiet) { T.loading = true; T.err = ''; renderTt(); }
+    try { T.data[key] = (await api('ttRegion', {region: key})).region; } catch (e) { T.err = e.message; }
+    T.loading = false; renderTt();
+  }
+
+  function ttField(name, label, type, value, list) {
+    return '<label>' + label + '<input name="' + name + '" type="' + (type || 'text') + '" value="' + esc(value || '') + '"' +
+      (list ? ' list="tt-mgrs"' : '') + ' autocomplete="off"></label>';
+  }
+
+  function ttFormHtml(d) {
+    const f = T.form; if (!f) return '';
+    const who = f.tt ? '<b>' + esc(f.tt) + '</b>' : f.fio ? '<b>' + esc(f.fio) + '</b>' : '';
+    let fields = '';
+    if (f.op === 'addTt') fields = ttField('name', 'Название ТТ', 'text', f.name) + ttField('manager', 'Менеджер', 'text', f.manager, true);
+    if (f.op === 'manager') fields = ttField('manager', 'Новый менеджер', 'text', f.manager, true);
+    if (f.op === 'rename') fields = ttField('newName', 'Новое название', 'text', f.newName);
+    if (f.op === 'addOp') fields = ttField('fio', 'ФИО оператора', 'text', f.fio);
+    if (f.op !== 'open') fields += ttField('date', f.op === 'fireOp' ? 'Не работает с' : f.op === 'close' ? 'Закрыта с' : 'С даты', 'date', f.date);
+    const p = T.plan;
+    const plan = !p ? '' : '<div class="preview" style="margin-top:4px"><div class="pv-top"><b>План · ' + esc(p.title) + '</b><span>' + p.steps.length + ' ' + plural(p.steps.length, 'изменение', 'изменения', 'изменений') + '</span></div>' +
+      '<div style="padding:0 14px 10px"><div class="note" style="margin:8px 0">' + esc(p.summary) + (p.scheduled ? ' · <b>выполнится ' + esc(p.dateLabel) + '</b>' : '') + '</div>' +
+      p.steps.map(s => '<div class="tt-step"><em>' + (s.target === 'ref' ? 'справочник' : 'таблица') + '</em><span>' + esc(s.sheet) + '!' + esc(s.a1) + ' · ' + esc(s.note) + '</span>' +
+        '<span></span><span>' + (s.beforeText ? '<s>' + esc(s.beforeText) + '</s> → ' : '') + '<b>' + esc(s.afterText || '(пусто)') + '</b></span></div>').join('') +
+      (p.warnings.length ? '<div class="warnbox" style="margin-top:8px">' + p.warnings.map(esc).join('<br>') + '</div>' : '') + '</div></div>';
+    const canApply = p && d.writeEnabled;
+    return '<div class="tt-form" id="tt-form"><div><b>' + esc(OP_LABEL[f.op]) + '</b> ' + who + '</div>' + fields +
+      (d.managers.length ? '<datalist id="tt-mgrs">' + d.managers.map(m => '<option value="' + esc(m) + '">').join('') + '</datalist>' : '') +
+      plan +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn2" data-tt="plan"' + (T.busy ? ' disabled' : '') + '>' + (p ? 'Пересчитать план' : 'Показать план') + '</button>' +
+        (p ? '<button class="send" data-tt="apply"' + (canApply && !T.busy ? '' : ' disabled') + '>' + (p.scheduled ? 'Запланировать' : 'Применить') + '</button>' : '') +
+        '<button class="btn2" data-tt="cancel">Отмена</button></div>' +
+      (p && !d.writeEnabled ? '<div class="note">Запись в таблицы пока выключена — сейчас только план. Включу после подтверждения.</div>' : '') +
+      '</div>';
+  }
+
+  function renderTt() {
+    const back = $('#tt-back-txt'), title = $('#tt-title'), body = $('#tt-body');
+    if (!T.region) {
+      back.textContent = 'Главная'; title.textContent = 'ТТ и операторы';
+      if (T.err) { body.innerHTML = errCard(T.err, 'tt'); return; }
+      if (!T.overview) { body.innerHTML = '<div class="skel" style="height:300px"></div><div class="note" style="margin-top:10px">Читаю справочник…</div>'; return; }
+      const card = r => '<button class="tt-card" data-reg="' + r.key + '">' + (r.pending ? '<span class="badge num">' + r.pending + '</span>' : '') +
+        '<b>' + esc(r.name) + '</b><small>' + r.tt + ' ТТ · ' + r.ops + ' ' + plural(r.ops, 'оператор', 'оператора', 'операторов') + '</small></button>';
+      body.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' +
+        '<div><div class="label">ФТ</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'ft').map(card).join('') + '</div></div>' +
+        '<div><div class="label">Рулька</div><div class="tt-grid">' + T.overview.filter(r => r.net === 'r').map(card).join('') + '</div></div></div>';
+      return;
+    }
+    const d = T.data[T.region];
+    back.textContent = 'Все регионы'; title.textContent = d ? d.name : 'Регион';
+    if (T.err && !d) { body.innerHTML = errCard(T.err, 'tt'); return; }
+    if (!d) { body.innerHTML = '<div class="skel" style="height:300px"></div><div class="note" style="margin-top:10px">Читаю таблицу обліку и справочник…</div>'; return; }
+
+    const q = T.q.trim().toLowerCase();
+    let list = '';
+    if (T.tab === 'tt') {
+      const groups = {active: d.tts.filter(t => t.inTable && !t.closed), closed: d.tts.filter(t => t.closed), missing: d.tts.filter(t => !t.inTable)};
+      const rows = (groups[T.filter] || groups.active).filter(t => !q || t.name.toLowerCase().includes(q) || (t.mgr || '').toLowerCase().includes(q));
+      list = '<div class="regions" id="tt-filter">' +
+        '<button class="reg" data-f="active" aria-pressed="' + (T.filter === 'active') + '">Активные <em class="num">' + groups.active.length + '</em></button>' +
+        '<button class="reg" data-f="closed" aria-pressed="' + (T.filter === 'closed') + '">Закрытые <em class="num">' + groups.closed.length + '</em></button>' +
+        (groups.missing.length ? '<button class="reg" data-f="missing" aria-pressed="' + (T.filter === 'missing') + '">Нет в таблице <em class="num">' + groups.missing.length + '</em></button>' : '') +
+        '</div><input class="tt-search" id="tt-q" placeholder="Поиск по ТТ или менеджеру" value="' + esc(T.q) + '">' +
+        '<button class="btn2" data-tt="form" data-op="addTt">+ Добавить ТТ</button>' +
+        (T.form && T.form.op === 'addTt' ? ttFormHtml(d) : '') +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(t => {
+          const open = T.open === t.name;
+          const acts = !t.inTable ? '<button class="send" data-tt="form" data-op="addTt" data-name="' + esc(t.name) + '" data-mgr="' + esc(t.mgr) + '">Добавить в таблицу</button>'
+            : t.closed ? '<button class="send" data-tt="form" data-op="open" data-t="' + esc(t.name) + '">Открыть</button>'
+            : '<button class="send" data-tt="form" data-op="manager" data-t="' + esc(t.name) + '">Сменить менеджера</button>' +
+              '<button class="send" data-tt="form" data-op="close" data-t="' + esc(t.name) + '">Закрыть</button>' +
+              '<button class="send" data-tt="form" data-op="rename" data-t="' + esc(t.name) + '">Переименовать</button>';
+          return '<div><button class="tt-row' + (t.closed ? ' off' : '') + '" data-ttopen="' + esc(t.name) + '"><b>' + esc(t.name) + '</b><small>' + esc(t.mgr || '— менеджер не указан') + '</small>' +
+            (t.closed ? '<span class="chip">закрыта с ' + esc(t.closed) + '</span>' : t.closeLater ? '<span class="chip">закроется ' + esc(t.closeLater) + '</span>' : '') +
+            (t.status && !/^Активна$|^Закрыта$/.test(t.status) ? '<span class="chip">' + esc(t.status) + '</span>' : '') + '</button>' +
+            (open ? '<div class="tt-open">' + (t.history.length ? '<div class="tt-hist">' + t.history.map(h => '<span>' + esc(h.from || '…') + ' – ' + esc(h.to || 'сейчас') + ' · ' + esc(h.mgr) + '</span>').join('') + '</div>' : '') +
+              (t.note ? '<div class="note">' + esc(t.note) + '</div>' : '') + '<div class="tt-acts">' + acts + '</div>' +
+              (T.form && T.form.tt === t.name ? ttFormHtml(d) : '') + '</div>' : '') + '</div>';
+        }).join('') : '<div class="empty">Ничего не найдено</div>') + '</div>';
+    } else {
+      const working = d.ops.filter(o => o.working), gone = d.ops.filter(o => !o.working);
+      const rows = (T.filter === 'gone' ? gone : working).filter(o => !q || o.fio.toLowerCase().includes(q));
+      list = '<div class="regions" id="tt-filter">' +
+        '<button class="reg" data-f="active" aria-pressed="' + (T.filter !== 'gone') + '">Работают <em class="num">' + working.length + '</em></button>' +
+        '<button class="reg" data-f="gone" aria-pressed="' + (T.filter === 'gone') + '">Уволенные <em class="num">' + gone.length + '</em></button></div>' +
+        '<button class="btn2" data-tt="form" data-op="addOp">+ Добавить оператора</button>' +
+        (T.form && T.form.op === 'addOp' ? ttFormHtml(d) : '') +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(o =>
+          '<div class="tt-row' + (o.working ? '' : ' off') + '"><b>' + esc(o.fio) + '</b><small>' + (o.count ? o.count + ' записей в сентябре · последняя ' + esc(o.last) : 'записей нет') +
+            (o.to ? ' · не работает с ' + esc(o.to) : '') + '</small>' +
+            (o.working ? '<div class="tt-acts" style="margin-top:8px"><button class="send" data-tt="form" data-op="fireOp" data-fio="' + esc(o.fio) + '">Уволить</button></div>' : '') +
+            (T.form && T.form.fio === o.fio && T.form.op === 'fireOp' ? ttFormHtml(d) : '') + '</div>').join('') : '<div class="empty">Никого нет</div>') + '</div>';
+    }
+    body.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
+      '<div class="seg two" id="tt-tab"><button data-tab="tt" aria-pressed="' + (T.tab === 'tt') + '">ТТ</button><button data-tab="ops" aria-pressed="' + (T.tab === 'ops') + '">Операторы</button></div>' +
+      (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + list +
+      (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
+      '<div><div class="qh">Журнал изменений</div><div class="list">' + (d.log.length ? d.log.map(l => '<div class="li"><span class="dot" style="background:var(--ok)"></span><div><b>' + esc(l.what) + '</b><small>' + esc([l.before, l.after].filter(String).join(' → ')) + (l.who ? ' · ' + esc(l.who) : '') + '</small></div><time>' + esc(l.at.slice(0, 5)) + '</time></div>').join('') : '<div class="empty">Изменений пока не было</div>') + '</div></div>' +
+      '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
+    if (T.keepFocus) { const i = $('#tt-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } T.keepFocus = false; }
+  }
+
+  function ttReadForm() {
+    const box = $('#tt-form'); if (!box) return;
+    box.querySelectorAll('input[name]').forEach(i => { T.form[i.name] = i.name === 'date' ? i.value : i.value; });
+  }
+  const ttReq = () => Object.assign({region: T.region}, T.form);
+
+  $('#tt-back').addEventListener('click', () => {
+    haptic();
+    if (T.region) { T.region = null; T.form = null; T.plan = null; T.open = null; T.err = ''; renderTt(); if (!T.overview) loadTtOverview(); }
+    else go('home');
+  });
+  $('#tt-body').addEventListener('input', e => {
+    if (e.target.id === 'tt-q') { T.q = e.target.value; T.keepFocus = true; renderTt(); }
+    else if (e.target.closest('#tt-form')) { T.plan = null; }
+  });
+  $('#tt-body').addEventListener('click', async e => {
+    const reg = e.target.closest('[data-reg]');
+    if (reg) { haptic(); T.region = reg.dataset.reg; T.tab = 'tt'; T.filter = 'active'; T.q = ''; T.form = null; T.plan = null; T.open = null;
+      renderTt(); loadTtRegion(T.region, !!T.data[T.region]); return; }
+    const tab = e.target.closest('[data-tab]'); if (tab) { T.tab = tab.dataset.tab; T.filter = 'active'; T.q = ''; T.form = null; T.plan = null; haptic(); renderTt(); return; }
+    const f = e.target.closest('#tt-filter [data-f]'); if (f) { T.filter = f.dataset.f; haptic(); renderTt(); return; }
+    const url = e.target.closest('[data-open-url]'); if (url) { tg && tg.openLink ? tg.openLink(url.dataset.openUrl) : window.open(url.dataset.openUrl); return; }
+    const row = e.target.closest('[data-ttopen]');
+    if (row && !e.target.closest('.tt-open')) { T.open = T.open === row.dataset.ttopen ? null : row.dataset.ttopen; if (T.form && T.form.tt !== T.open) { T.form = null; T.plan = null; } haptic(); renderTt(); return; }
+    const b = e.target.closest('[data-tt]'); if (!b) return;
+    const act = b.dataset.tt;
+    if (act === 'form') {
+      haptic();
+      T.form = {op: b.dataset.op, date: isoToday()};
+      if (b.dataset.t) T.form.tt = b.dataset.t;
+      if (b.dataset.fio) T.form.fio = b.dataset.fio;
+      if (b.dataset.name) { T.form.name = b.dataset.name; T.form.manager = b.dataset.mgr || ''; }
+      T.plan = null; renderTt(); return;
+    }
+    if (act === 'cancel') { T.form = null; T.plan = null; renderTt(); return; }
+    ttReadForm();
+    if (act === 'plan') {
+      T.busy = true; T.err = ''; renderTt();
+      try { T.plan = (await api('ttPlan', {body: ttReq()})).plan; haptic('ok'); }
+      catch (err) { haptic('err'); toast(err.message); }
+      T.busy = false; renderTt(); return;
+    }
+    if (act === 'apply') {
+      T.busy = true; renderTt();
+      try {
+        const d = await api('ttApply', {body: ttReq()});
+        T.data[T.region] = d.region; T.overview = null;
+        toast(d.result.scheduled ? 'Запланировано на ' + d.result.plan.dateLabel : 'Готово: ' + d.result.plan.summary);
+        haptic('ok'); T.form = null; T.plan = null;
+      } catch (err) { haptic('err'); toast(err.message); }
+      T.busy = false; renderTt();
+    }
+  });
+
   /* ---------- РАССЫЛКА ---------- */
   function renderSend() {
     const blocks = [['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
@@ -956,7 +1159,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   /* ---------- Навигация ---------- */
-  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', dates: 's-dates', send: 's-send', history: 's-history'};
+  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', dates: 's-dates', tt: 's-tt', send: 's-send', history: 's-history'};
   let current = 'home';
   function go(key) {
     current = key;
@@ -968,26 +1171,27 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
     const form = key === 'checks' || key === 'sos' || key === 'an';
     $('#dock').hidden = !form;
-    $('#tabs').hidden = form || key === 'dates';
+    $('#tabs').hidden = form || key === 'dates' || key === 'tt';
     if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
     window.scrollTo(0, 0);
     if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
     // SOS: показываем сохранённое сразу и обновляем в фоне
     if (key === 'sos' && !S.loading) loadSos();
     if (key === 'dates') loadDates();
+    if (key === 'tt') { if (T.region) loadTtRegion(T.region, !!T.data[T.region]); else loadTtOverview(); }
     if (key === 'an' && !A.loading && !(A.sums[anKey()] && A.sums[anKey()].regions)) loadAn();
     renderAll();
   }
   if (tg && tg.BackButton) tg.BackButton.onClick(() => go('home'));
 
   function renderAll() {
-    renderHome(); renderChecks(); renderSos(); renderAn(); renderDates(); renderSend();
+    renderHome(); renderChecks(); renderSos(); renderAn(); renderDates(); renderTt(); renderSend();
     $('#hist-full').innerHTML = histItems(0);
   }
 
   document.addEventListener('click', e => {
     const g = e.target.closest('[data-go]'); if (g) { haptic(); go(g.dataset.go); return; }
-    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : loadSummary(r.dataset.retry, true); return; }
+    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : r.dataset.retry === 'tt' ? (T.region ? loadTtRegion(T.region) : loadTtOverview()) : loadSummary(r.dataset.retry, true); return; }
     const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   });
   $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
