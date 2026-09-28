@@ -400,6 +400,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
+  const APP_VERSION = '28.09 · 27';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -528,6 +529,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<span><b>ТТ и операторы</b><small>13 регионов · менеджеры · операторы</small></span></button>' +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
+      '<div class="note" style="text-align:center">Версия ' + APP_VERSION + '</div>' +
       '</div>';
     countUp($('#hero-sum'), total);
   }
@@ -1025,6 +1027,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="reg" data-f="active" aria-pressed="' + (T.filter !== 'gone') + '">Работают <em class="num">' + working.length + '</em></button>' +
         '<button class="reg" data-f="gone" aria-pressed="' + (T.filter === 'gone') + '">Уволенные <em class="num">' + gone.length + '</em></button></div>' +
         '<button class="btn2" data-tt="form" data-op="addOp">+ Добавить оператора</button>' +
+        '<div class="note">Выпадающие списки в таблице: ' + esc((d.opLists || []).join('; ') || 'не найдены') + '</div>' +
         (T.form && T.form.op === 'addOp' ? ttFormHtml(d) : '') +
         '<div style="display:flex;flex-direction:column;gap:8px">' + (rows.length ? rows.map(o =>
           '<div class="tt-row' + (o.working || o.inLists ? '' : ' off') + '"><b>' + esc(o.fio) + '</b>' + (o.to ? '<small>не работает с ' + esc(o.to) + '</small>' : '') +
