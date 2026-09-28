@@ -400,7 +400,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 28';
+  const APP_VERSION = '29.09 · 29';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -928,7 +928,19 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   /* ---------- ТТ И ОПЕРАТОРЫ ---------- */
   const T = { overview: null, loading: false, region: null, data: {}, tab: 'tt', q: '', filter: 'active', open: null,
-              form: null, plan: null, busy: false, err: '' };
+              form: null, plan: null, busy: false, err: '', queue: {} };
+  // Список изменений «к применению» — по регионам, хранится на устройстве до применения
+  const TT_QUEUE_KEY = 'priz_tt_queue';
+  try { T.queue = JSON.parse(localStorage.getItem(TT_QUEUE_KEY) || '{}') || {}; } catch (e) {}
+  const ttQ = () => T.queue[T.region] || (T.queue[T.region] = []);
+  function ttSaveQ() { try { localStorage.setItem(TT_QUEUE_KEY, JSON.stringify(T.queue)); } catch (e) {} }
+  const ruDate = v => v ? v.split('-').reverse().slice(0, 2).join('.') : '';
+  function ttDesc(r) {
+    const who = r.tt || r.name || r.fio || '';
+    const extra = r.op === 'manager' || r.op === 'addTt' ? (r.manager ? '→ ' + r.manager : '') : r.op === 'rename' ? '→ ' + (r.newName || '') : '';
+    const when = r.op !== 'open' && r.date ? (r.op === 'fireOp' ? 'не работает с ' : 'с ') + ruDate(r.date) : '';
+    return {title: OP_LABEL[r.op] + (who ? ' · ' + who : ''), sub: [extra, when].filter(Boolean).join(' · ')};
+  }
   const isoToday = () => iso(new Date());
   const OP_LABEL = {addTt: 'Добавить ТТ', manager: 'Сменить менеджера', close: 'Закрыть ТТ', open: 'Открыть ТТ',
                     rename: 'Переименовать ТТ', addOp: 'Добавить оператора', fireOp: 'Уволить оператора'};
@@ -963,6 +975,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       (d.managers.length ? '<datalist id="tt-mgrs">' + d.managers.map(m => '<option value="' + esc(m) + '">').join('') + '</datalist>' : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="send" data-tt="apply"' + (d.writeEnabled && !T.busy ? '' : ' disabled') + '>' + (T.busy ? 'Применяю…' : 'Применить') + '</button>' +
+        '<button class="btn2" data-tt="queue"' + (T.busy ? ' disabled' : '') + '>В список</button>' +
         '<button class="btn2" data-tt="cancel"' + (T.busy ? ' disabled' : '') + '>Отмена</button></div>' +
       (!d.writeEnabled ? '<div class="note">Запись в таблицы выключена.</div>' : '') +
       '</div>';
@@ -1007,6 +1020,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
               '<button class="send" data-tt="form" data-op="close" data-t="' + esc(t.name) + '">Закрыть</button>' +
               '<button class="send" data-tt="form" data-op="rename" data-t="' + esc(t.name) + '">Переименовать</button>';
           return '<div><button class="tt-row' + (t.closed ? ' off' : '') + '" data-ttopen="' + esc(t.name) + '"><b>' + esc(t.name) + '</b><small>' + esc(t.mgr || '— менеджер не указан') + '</small>' +
+            ((T.queue[T.region] || []).some(r => r.tt === t.name || r.name === t.name) ? '<span class="chip" style="color:var(--warn)">в списке</span> ' : '') +
             (t.closed ? '<span class="chip">закрыта с ' + esc(t.closed) + '</span>' : t.closeLater ? '<span class="chip">закроется ' + esc(t.closeLater) + '</span>' : '') +
             (t.status && !/^Активна$|^Закрыта$/.test(t.status) ? '<span class="chip">' + esc(t.status) + '</span>' : '') + '</button>' +
             (open ? '<div class="tt-open">' + (t.history.length ? '<div class="tt-hist">' + t.history.map(h => '<span>' + esc(h.from || '…') + ' – ' + esc(h.to || 'сейчас') + ' · ' + esc(h.mgr) + '</span>').join('') + '</div>' : '') +
@@ -1033,12 +1047,28 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       '<div class="seg two" id="tt-tab"><button data-tab="tt" aria-pressed="' + (T.tab === 'tt') + '">ТТ</button><button data-tab="ops" aria-pressed="' + (T.tab === 'ops') + '">Операторы</button></div>' +
       (d.test ? '<div class="warnbox">Тестовая копия: изменения пишутся только в копию таблицы и копию справочника.</div>' : '') +
       (T.notice ? '<div class="preview" style="padding:12px 14px"><b>' + esc(T.notice.text) + '</b>' +
+        (T.notice.lines && T.notice.lines.length ? '<div class="note" style="margin-top:6px">' + T.notice.lines.map(esc).join('<br>') + '</div>' : '') +
         (T.notice.warnings.length ? '<div class="warnbox" style="margin-top:8px">' + T.notice.warnings.map(esc).join('<br>') + '</div>' : '') +
         '<button class="btn2" data-tt="dismiss" style="margin-top:8px">Понятно</button></div>' : '') +
-      (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + list +
+      (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + ttQueueHtml(d) + list +
       (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
       '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
     if (T.keepFocus) { const i = $('#tt-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } T.keepFocus = false; }
+  }
+
+  function ttQueueHtml(d) {
+    const q = T.queue[T.region] || [];
+    if (!q.length) return '';
+    return '<div class="preview" style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
+      '<div class="pv-top" style="padding:0"><b>К применению</b><span>' + q.length + ' ' + plural(q.length, 'изменение', 'изменения', 'изменений') + '</span></div>' +
+      q.map((r, i) => { const x = ttDesc(r); return '<div style="display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:8px">' +
+        '<span class="num" style="color:var(--faint);font-size:12px">' + (i + 1) + '</span><div style="flex:1;min-width:0"><b style="font-size:14px">' + esc(x.title) + '</b>' +
+        (x.sub ? '<div class="note" style="margin:2px 0 0">' + esc(x.sub) + '</div>' : '') + '</div>' +
+        '<button class="btn2" data-tt="unq" data-i="' + i + '" aria-label="Убрать"' + (T.busy ? ' disabled' : '') + ' style="width:auto;padding:6px 12px">✕</button></div>'; }).join('') +
+      '<div class="note" style="margin:0">Применяются по порядку. Если одно не получится — остановлюсь, остальные останутся в списке.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="send" data-tt="applyAll"' + (d.writeEnabled && !T.busy ? '' : ' disabled') + '>' +
+        (T.busy ? 'Применяю…' : 'Применить все (' + q.length + ')') + '</button>' +
+      '<button class="btn2" data-tt="clearq"' + (T.busy ? ' disabled' : '') + '>Очистить</button></div></div>';
   }
 
   function ttReadForm() {
@@ -1077,7 +1107,35 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
     if (act === 'cancel') { T.form = null; T.plan = null; renderTt(); return; }
     if (act === 'dismiss') { T.notice = null; renderTt(); return; }
+    if (act === 'unq') { ttQ().splice(+b.dataset.i, 1); ttSaveQ(); haptic(); renderTt(); return; }
+    if (act === 'clearq') { T.queue[T.region] = []; ttSaveQ(); haptic(); renderTt(); return; }
+    if (act === 'applyAll') {
+      const q = ttQ(); if (T.busy || !q.length) return;
+      T.busy = true; T.notice = null; renderTt();
+      try {
+        const d = await api('ttApplyBatch', {body: {region: T.region, items: q.map(r => Object.assign({}, r))}});
+        T.data[T.region] = d.region; T.overview = null;
+        const done = d.results.filter(r => r.ok), fail = d.results.find(r => !r.ok);
+        const lines = d.results.map((r, i) => r.ok ? '✓ ' + (r.scheduled ? 'запланировано на ' + r.dateLabel + ': ' : '') + r.summary : '✕ ' + ttDesc(q[i]).title + ': ' + r.error);
+        T.queue[T.region] = q.slice(done.length); ttSaveQ();
+        T.notice = {text: fail ? 'Выполнено ' + done.length + ' из ' + q.length + ' — остановился на ошибке' : 'Готово: ' + done.length + ' ' + plural(done.length, 'изменение', 'изменения', 'изменений'),
+                    lines, warnings: [].concat(...done.map(r => r.warnings || []))};
+        haptic(fail ? 'err' : 'ok'); T.form = null;
+        window.scrollTo(0, 0);
+      } catch (err) { haptic('err'); toast(err.message); }
+      T.busy = false; renderTt(); return;
+    }
     ttReadForm();
+    if (act === 'queue') {
+      const r = Object.assign({}, T.form);
+      if (r.op === 'addTt' && !(r.name || '').trim()) return toast('Укажи название ТТ');
+      if (r.op === 'manager' && !(r.manager || '').trim()) return toast('Укажи менеджера');
+      if (r.op === 'rename' && !(r.newName || '').trim()) return toast('Укажи новое название');
+      if (r.op === 'addOp' && !(r.fio || '').trim()) return toast('Укажи ФИО');
+      ttQ().push(r); ttSaveQ(); haptic('ok');
+      T.form = null; T.open = null; toast('В списке: ' + ttQ().length);
+      renderTt(); return;
+    }
     if (act === 'apply') {
       if (T.busy) return;
       T.busy = true; T.notice = null; renderTt();
