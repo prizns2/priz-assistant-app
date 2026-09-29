@@ -403,7 +403,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 32';
+  const APP_VERSION = '29.09 · 33';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -1108,8 +1108,30 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="btn2" data-tt="dismiss" style="margin-top:8px">Понятно</button></div>' : '') +
       (T.err ? '<div class="warnbox">' + esc(T.err) + '</div>' : '') + ttQueueHtml(d) + list +
       (d.pending.length ? '<div><div class="qh">Запланировано</div><div class="list">' + d.pending.map(p => '<div class="li"><span class="dot" style="background:var(--warn)"></span><div><b>' + esc(p.title) + '</b><small>' + esc(p.summary) + '</small></div><time>' + esc(p.at) + '</time></div>').join('') + '</div></div>' : '') +
+      (T.tab === 'tt' ? ttMgrHtml(d) : '') +
       '<button class="btn2" data-open-url="' + esc(d.url) + '">Открыть «Пример» в таблице</button></div>';
     if (T.keepFocus) { const i = $('#tt-q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } T.keepFocus = false; }
+  }
+
+  // Менеджер по дате вместо VLOOKUP
+  T.mgr = {};
+  function ttMgrHtml(d) {
+    const m = T.mgr[T.region] || {}, r = m.res;
+    const cnt = x => x.skip ? esc(x.skip) :
+      'Записи: по дате ' + x.counts.dataDate + ', через LOOKUP ' + x.counts.dataLookup + ', значением ' + x.counts.dataValue +
+      ' · пустые строки: по дате ' + x.counts.emptyDate + ', через LOOKUP ' + x.counts.emptyLookup;
+    const ver = v => !v ? '' : '<br>' + (v.changed || v.cleared ? '<b style="color:var(--bad)">Изменилось у записей: ' + (v.changed + v.cleared) + '</b>' : '<b style="color:var(--ok)">Записи не изменились ✓</b>') +
+      (v.filled ? ' · было пусто, теперь заполнено: ' + v.filled : '') + (v.samples.length ? '<br>' + v.samples.map(esc).join('<br>') : '');
+    return '<div class="preview" style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">' +
+      '<div class="pv-top" style="padding:0"><b>Менеджер по дате</b><span>' + (d.lookupEnabled ? '' : 'пока только тест') + '</span></div>' +
+      '<div class="note" style="margin:0">Записи, где менеджер считается через VLOOKUP, закрепляются значением (на экране то же самое). Пустые строки ищут менеджера в истории на дату записи. Смена менеджера в помощнике тогда сразу действует на новые записи.</div>' +
+      (r ? '<div style="display:flex;flex-direction:column;gap:6px">' + r.sheets.map(x => '<div style="border-top:1px solid var(--line);padding-top:6px"><b style="font-size:14px">' + esc(x.sheet) + '</b>' +
+          '<div class="note" style="margin:2px 0 0">' + cnt(x) + (x.skip ? '' : '<br>' + (r.apply ? 'Сделано' : 'Будет') + ': закрепить ' + x.freeze + ', формула по дате в ' + x.replace) + ver(x.verify) + '</div></div>').join('') +
+        (r.seed.length ? '<div class="note" style="margin:0">' + (r.apply ? 'Добавлено' : 'Добавлю') + ' в историю с ' + esc(r.seedFrom) + ':<br>' + r.seed.map(esc).join('<br>') + '</div>' : '') +
+        (r.seedSkipped.length ? '<div class="warnbox">Нет истории и не указан менеджер в списке: ' + r.seedSkipped.map(esc).join(', ') + '</div>' : '') + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="send" data-tt="mgrApply"' + (d.lookupEnabled && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'apply' ? 'Перевожу…' : 'Перевести') + '</button>' +
+        '<button class="btn2" data-tt="mgrCheck"' + (m.busy ? ' disabled' : '') + '>' + (m.busy === 'check' ? 'Смотрю…' : 'Что будет сделано') + '</button></div></div>';
   }
 
   function ttQueueHtml(d) {
@@ -1163,6 +1185,23 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
     if (act === 'cancel') { T.form = null; T.plan = null; renderTt(); return; }
     if (act === 'dismiss') { T.notice = null; renderTt(); return; }
+    if (act === 'mgrCheck' || act === 'mgrApply') {
+      const key = T.region, m = T.mgr[key] || (T.mgr[key] = {});
+      if (m.busy) return;
+      if (act === 'mgrApply') {
+        const q = 'Перевести «' + (T.data[key] || {}).name + '» на менеджера по дате?';
+        const ok = await new Promise(res => tg && tg.showConfirm ? tg.showConfirm(q, res) : res(confirm(q)));
+        if (!ok) return;
+      }
+      m.busy = act === 'mgrApply' ? 'apply' : 'check'; m.res = null; renderTt(); haptic();
+      try {
+        const d = await api('mgrRun', {region: key, apply: act === 'mgrApply'});
+        m.res = d.mgr; if (d.region) T.data[key] = d.region;
+        const bad = d.mgr.sheets.some(x => x.verify && (x.verify.changed || x.verify.cleared));
+        haptic(bad ? 'err' : 'ok'); if (d.mgr.apply) toast(bad ? 'Готово, но есть изменения в записях — смотри ниже' : 'Готово');
+      } catch (err) { haptic('err'); toast(err.message); }
+      m.busy = false; renderTt(); return;
+    }
     if (act === 'unq') { ttQ().splice(+b.dataset.i, 1); ttSaveQ(); haptic(); renderTt(); return; }
     if (act === 'clearq') { T.queue[T.region] = []; ttSaveQ(); haptic(); renderTt(); return; }
     if (act === 'applyAll') {
