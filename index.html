@@ -403,7 +403,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 33';
+  const APP_VERSION = '29.09 · 34';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -862,8 +862,11 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   /* Новый месяц: проверка дат и счётчики по операторам */
   const MP = { st: null, key: null, month: null, busy: false, res: null };
+  const DT_STORE = 'priz:dates:v1';
+  try { const c = JSON.parse(localStorage.getItem(DT_STORE) || 'null'); if (c) { MP.st = c.month || null; if (c.tables) { D.tables = c.tables; D.state = c.state || {}; D.loaded = true; } } } catch (e) {}
+  function dtStore() { try { localStorage.setItem(DT_STORE, JSON.stringify({month: MP.st, tables: D.loaded ? D.tables : null, state: D.state})); } catch (e) {} }
   async function loadMonth() {
-    try { MP.st = (await api('monthState')).month; MP.month = MP.month || MP.st.month;
+    try { MP.st = (await api('monthState')).month; dtStore(); MP.month = MP.month || MP.st.month;
       if (!MP.key) MP.key = (MP.st.tables.find(t => t.test) || MP.st.tables[0]).key; }
     catch (e) { MP.err = e.message; }
     renderMonth();
@@ -913,8 +916,10 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   async function loadDates() {
-    if (!MP.st) loadMonth();
-    try { const d = await api('datesState'); D.tables = d.dates.tables; D.state = d.dates.state || {}; D.loaded = true; applyState(d); }
+    if (MP.st && !MP.month) { MP.month = MP.st.month; MP.key = MP.key || (MP.st.tables.find(t => t.test) || MP.st.tables[0]).key; }
+    renderDates(); renderMonth();
+    loadMonth();
+    try { const d = await api('datesState'); D.tables = d.dates.tables; D.state = d.dates.state || {}; D.loaded = true; applyState(d); dtStore(); }
     catch (e) { toast(e.message); }
     renderDates();
   }
@@ -926,7 +931,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     toast((body.reset ? 'Снимаю фильтр' : 'Показываю ' + what) + ' · ' + keys.length + ' ' + plural(keys.length, 'таблица', 'таблицы', 'таблиц') + '…');
     try {
       const d = await api('datesApply', Object.assign({keys}, body));
-      D.results = d.dates.results; D.state = d.dates.state || D.state; applyState(d);
+      D.results = d.dates.results; D.state = d.dates.state || D.state; applyState(d); dtStore();
       const bad = D.results.filter(r => r.error).length;
       haptic(bad ? 'err' : 'ok'); toast(bad ? 'Готово, но с ошибками: ' + bad : 'Готово. Открой таблицу');
     } catch (e) { haptic('err'); toast(e.message); }
@@ -1001,15 +1006,22 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const OP_LABEL = {addTt: 'Добавить ТТ', manager: 'Сменить менеджера', close: 'Закрыть ТТ', open: 'Открыть ТТ',
                     rename: 'Переименовать ТТ', addOp: 'Добавить оператора', fireOp: 'Уволить оператора'};
 
+  // Последние данные хранятся на устройстве: экран открывается сразу, свежие подтягиваются в фоне
+  const TT_STORE = 'priz:tt:v1';
+  try { const c = JSON.parse(localStorage.getItem(TT_STORE) || 'null'); if (c) { T.overview = c.overview || null; T.data = c.data || {}; } } catch (e) {}
+  function ttStore() { try { localStorage.setItem(TT_STORE, JSON.stringify({overview: T.overview, data: T.data})); } catch (e) {} }
   async function loadTtOverview() {
-    T.loading = true; T.err = ''; renderTt();
-    try { T.overview = (await api('ttOverview')).regions; } catch (e) { T.err = e.message; }
-    T.loading = false; renderTt();
+    const quiet = !!T.overview;
+    if (!quiet) { T.loading = true; T.err = ''; renderTt(); }
+    try { T.overview = (await api('ttOverview')).regions; T.err = ''; ttStore(); }
+    catch (e) { if (quiet) toast(e.message); else T.err = e.message; }
+    T.loading = false; if (current === 'tt') renderTt();
   }
   async function loadTtRegion(key, quiet) {
     if (!quiet) { T.loading = true; T.err = ''; renderTt(); }
-    try { T.data[key] = (await api('ttRegion', {region: key})).region; } catch (e) { T.err = e.message; }
-    T.loading = false; renderTt();
+    try { T.data[key] = (await api('ttRegion', {region: key})).region; T.err = ''; ttStore(); }
+    catch (e) { if (quiet) toast(e.message); else T.err = e.message; }
+    T.loading = false; if (current === 'tt') renderTt();
   }
 
   function ttField(name, label, type, value, list) {
@@ -1157,7 +1169,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   $('#tt-back').addEventListener('click', () => {
     haptic();
-    if (T.region) { T.region = null; T.form = null; T.plan = null; T.open = null; T.notice = null; T.err = ''; renderTt(); if (!T.overview) loadTtOverview(); }
+    if (T.region) { T.region = null; T.form = null; T.plan = null; T.open = null; T.notice = null; T.err = ''; renderTt(); loadTtOverview(); }
     else go('home');
   });
   $('#tt-body').addEventListener('input', e => {
@@ -1196,7 +1208,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       m.busy = act === 'mgrApply' ? 'apply' : 'check'; m.res = null; renderTt(); haptic();
       try {
         const d = await api('mgrRun', {region: key, apply: act === 'mgrApply'});
-        m.res = d.mgr; if (d.region) T.data[key] = d.region;
+        m.res = d.mgr; if (d.region) { T.data[key] = d.region; ttStore(); }
         const bad = d.mgr.sheets.some(x => x.verify && (x.verify.changed || x.verify.cleared));
         haptic(bad ? 'err' : 'ok'); if (d.mgr.apply) toast(bad ? 'Готово, но есть изменения в записях — смотри ниже' : 'Готово');
       } catch (err) { haptic('err'); toast(err.message); }
@@ -1209,7 +1221,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       T.busy = true; T.notice = null; renderTt();
       try {
         const d = await api('ttApplyBatch', {body: {region: T.region, items: q.map(r => Object.assign({}, r))}});
-        T.data[T.region] = d.region; T.overview = null;
+        T.data[T.region] = d.region; ttStore();
         const done = d.results.filter(r => r.ok), fail = d.results.find(r => !r.ok);
         const lines = d.results.map((r, i) => r.ok ? '✓ ' + (r.scheduled ? 'запланировано на ' + r.dateLabel + ': ' : '') + r.summary : '✕ ' + ttDesc(q[i]).title + ': ' + r.error);
         T.queue[T.region] = q.slice(done.length); ttSaveQ();
@@ -1236,7 +1248,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       T.busy = true; T.notice = null; renderTt();
       try {
         const d = await api('ttApply', {body: ttReq()});
-        T.data[T.region] = d.region; T.overview = null;
+        T.data[T.region] = d.region; ttStore();
         const p = d.result.plan;
         T.notice = {text: (d.result.scheduled ? 'Запланировано на ' + p.dateLabel + ': ' : 'Готово: ') + p.summary, warnings: p.warnings || []};
         haptic('ok'); T.form = null; T.plan = null;
@@ -1364,6 +1376,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   if (tg && tg.initData) {
     // Сервер при первом чтении кэширует все периоды — второй запрос уже мгновенный.
     loadSummary('week').then(() => { if (state.period !== 'week') loadSummary(state.period); });
+    // Заранее: список регионов ТТ — чтобы «ТТ и операторы» открывался сразу
+    setTimeout(() => { if (!T.overview || current !== 'tt') loadTtOverview(); }, 1500);
   }
 })();
 </script>
