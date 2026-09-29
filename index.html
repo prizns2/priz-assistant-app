@@ -403,7 +403,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 34';
+  const APP_VERSION = '29.09 · 35';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -1008,18 +1008,35 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   // Последние данные хранятся на устройстве: экран открывается сразу, свежие подтягиваются в фоне
   const TT_STORE = 'priz:tt:v1';
-  try { const c = JSON.parse(localStorage.getItem(TT_STORE) || 'null'); if (c) { T.overview = c.overview || null; T.data = c.data || {}; } } catch (e) {}
-  function ttStore() { try { localStorage.setItem(TT_STORE, JSON.stringify({overview: T.overview, data: T.data})); } catch (e) {} }
+  T.at = {};
+  try { const c = JSON.parse(localStorage.getItem(TT_STORE) || 'null'); if (c) { T.overview = c.overview || null; T.data = c.data || {}; T.at = c.at || {}; } } catch (e) {}
+  function ttStore() { try { localStorage.setItem(TT_STORE, JSON.stringify({overview: T.overview, data: T.data, at: T.at})); } catch (e) {} }
+  // В фоне подгружает все регионы (по два сразу), чтобы любой открывался мгновенно
+  let ttPrefetching = false;
+  async function ttPrefetch() {
+    if (ttPrefetching || !T.overview) return;
+    ttPrefetching = true;
+    const keys = T.overview.map(r => r.key).filter(k => !T.data[k] || Date.now() - (T.at[k] || 0) > 10 * 60000)
+      .sort((a, b) => (T.data[a] ? 1 : 0) - (T.data[b] ? 1 : 0));
+    const worker = async () => {
+      for (let k; (k = keys.shift());) {
+        try { T.data[k] = (await api('ttRegion', {region: k})).region; T.at[k] = Date.now(); ttStore(); if (current === 'tt' && T.region === k) renderTt(); }
+        catch (e) {}
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    ttPrefetching = false;
+  }
   async function loadTtOverview() {
     const quiet = !!T.overview;
     if (!quiet) { T.loading = true; T.err = ''; renderTt(); }
-    try { T.overview = (await api('ttOverview')).regions; T.err = ''; ttStore(); }
+    try { T.overview = (await api('ttOverview')).regions; T.err = ''; ttStore(); if (current === 'tt') ttPrefetch(); }
     catch (e) { if (quiet) toast(e.message); else T.err = e.message; }
     T.loading = false; if (current === 'tt') renderTt();
   }
   async function loadTtRegion(key, quiet) {
     if (!quiet) { T.loading = true; T.err = ''; renderTt(); }
-    try { T.data[key] = (await api('ttRegion', {region: key})).region; T.err = ''; ttStore(); }
+    try { T.data[key] = (await api('ttRegion', {region: key})).region; T.at[key] = Date.now(); T.err = ''; ttStore(); }
     catch (e) { if (quiet) toast(e.message); else T.err = e.message; }
     T.loading = false; if (current === 'tt') renderTt();
   }
@@ -1341,7 +1358,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     // SOS: показываем сохранённое сразу и обновляем в фоне
     if (key === 'sos' && !S.loading) loadSos();
     if (key === 'dates') loadDates();
-    if (key === 'tt') { if (T.region) loadTtRegion(T.region, !!T.data[T.region]); else loadTtOverview(); }
+    if (key === 'tt') { if (T.region) loadTtRegion(T.region, !!T.data[T.region]); else loadTtOverview(); ttPrefetch(); }
     if (key === 'an' && !A.loading && !(A.sums[anKey()] && A.sums[anKey()].regions)) loadAn();
     renderAll();
   }
