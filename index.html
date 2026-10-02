@@ -412,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '02.10 · 36';
+  const APP_VERSION = '02.10 · 37';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -540,7 +540,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="mod" data-go="tt"><span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/></svg></span>' +
           '<span><b>ТТ и операторы</b><small>13 регионов · менеджеры · операторы</small></span></button>' +
         '<button class="mod" data-go="pc"><span class="ic" style="color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>' +
-          '<span><b>Рабочий ПК</b><small>Brave · начать · завершить</small></span></button>' +
+          '<span><b>Рабочий ПК</b><small>Brave и программы · начать · завершить</small></span></button>' +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
       '<div class="note" style="text-align:center">Версия ' + APP_VERSION + '</div>' +
@@ -1311,7 +1311,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '</div>';
     const pend = st.pending ? '<div class="preview" style="padding:12px 14px"><b>Отправлено на ПК: ' + esc(PC_CMD[st.pending.cmd] || st.pending.cmd) + '…</b>' +
       '<div class="note" style="margin:4px 0 0">' + (st.online ? 'ПК заберёт команду в течение нескольких секунд.' : 'ПК сейчас не на связи. Если он не появится за 2 минуты, команда отменится.') + '</div></div>' : '';
-    const last = st.last ? '<div class="list"><div class="li">' + dot(st.last.ok ? 'var(--ok)' : 'var(--warn)') + '<div><b>' + esc(PC_CMD[st.last.cmd] || st.last.cmd) + '</b><small>' + esc(st.last.text) + '</small></div><time>' + esc(st.last.at.slice(-8, -3)) + '</time></div></div>' : '';
+    const last = st.last ? '<div class="list"><div class="li">' + dot(st.last.ok ? 'var(--ok)' : 'var(--warn)') + '<div><b>' + esc(PC_CMD[st.last.cmd] || st.last.cmd) + '</b><small>' + esc(st.last.text).replace(/\n/g, '<br>') + '</small></div><time>' + esc(st.last.at.slice(-8, -3)) + '</time></div></div>' : '';
     const dis = !st.configured || P.busy || st.pending ? ' disabled' : '';
     el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' + status +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
@@ -1319,7 +1319,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
         '<button class="btn2" data-pc="stop"' + dis + '>🔴 Завершить</button>' +
         '<button class="btn2" data-pc="refresh"' + (P.busy ? ' disabled' : '') + '>ℹ️ Статус</button></div>' +
       pend + (last ? '<div><div class="qh" style="margin-bottom:8px">Последний результат</div>' + last + '</div>' : '') +
-      '<div class="note">«Начать работу» открывает рабочий Brave с вкладками, «Завершить» закрывает только его — обычный Brave не трогается. Результат придёт и сообщением в бот.</div></div>';
+      '<div class="note">«Начать работу» открывает рабочий Brave с вкладками и программы из списка, «Завершить» закрывает их (обычный Brave не трогается). Результат придёт и сообщением в бот.</div></div>';
   }
   $('#pc-body').addEventListener('click', async e => {
     const b = e.target.closest('[data-pc]'); if (!b || P.busy) return;
