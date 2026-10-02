@@ -349,6 +349,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     <div id="tt-body"></div>
   </section>
 
+  <!-- РАБОЧИЙ ПК -->
+  <section class="screen" id="s-pc" hidden>
+    <button class="back" data-go="home">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Главная
+    </button>
+    <h1 class="h1">Рабочий ПК</h1>
+    <div id="pc-body"></div>
+  </section>
+
   <!-- РАССЫЛКА -->
   <section class="screen" id="s-send" hidden>
     <h1 class="h1">Рассылка</h1>
@@ -403,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '29.09 · 35';
+  const APP_VERSION = '02.10 · 36';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -530,6 +539,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<span><b>Отображение дат</b><small>Фильтр в таблицах · 1 нажатие</small></span></button>' +
         '<button class="mod" data-go="tt"><span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/></svg></span>' +
           '<span><b>ТТ и операторы</b><small>13 регионов · менеджеры · операторы</small></span></button>' +
+        '<button class="mod" data-go="pc"><span class="ic" style="color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>' +
+          '<span><b>Рабочий ПК</b><small>Brave · начать · завершить</small></span></button>' +
       '</div></div>' +
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
       '<div class="note" style="text-align:center">Версия ' + APP_VERSION + '</div>' +
@@ -1275,6 +1286,51 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     }
   });
 
+  /* ---------- РАБОЧИЙ ПК ---------- */
+  const P = { st: null, err: '', busy: false, timer: null };
+  async function loadPc(quiet) {
+    try { P.st = (await api('pcState')).pc; P.err = ''; } catch (e) { if (!quiet) P.err = e.message; }
+    if (current === 'pc') renderPc();
+  }
+  // Пока экран открыт — обновляем: чаще, если команда ждёт ПК
+  function pcTick() {
+    clearTimeout(P.timer);
+    if (current !== 'pc') return;
+    P.timer = setTimeout(() => loadPc(true).then(pcTick), P.st && P.st.pending ? 3000 : 10000);
+  }
+  const PC_CMD = {start: 'Начать работу', stop: 'Завершить'};
+  function renderPc() {
+    const el = $('#pc-body'), st = P.st;
+    if (!st) { el.innerHTML = P.err ? errCard(P.err, 'pc') : '<div class="skel" style="height:180px"></div>'; return; }
+    const dot = c => '<span class="dot" style="background:' + c + '"></span>';
+    const status = !st.configured ? '<div class="warnbox">Агент ещё не настроен (нет ключа). Запусти pc-agent/install.bat на ПК.</div>'
+      : '<div class="list">' +
+        '<div class="li">' + dot(st.online ? 'var(--ok)' : 'var(--bad)') + '<div><b>' + (st.online ? 'ПК на связи' : 'ПК не на связи') + '</b><small>' +
+          (st.seenAt ? (st.online ? esc(st.host || 'агент работает') : 'последний раз ' + esc(st.seenAt)) : 'агент ещё ни разу не подключался') + '</small></div></div>' +
+        (st.online ? '<div class="li">' + dot(st.running ? 'var(--ok)' : 'var(--faint)') + '<div><b>Рабочий Brave ' + (st.running ? 'запущен' : 'не запущен') + '</b><small>профиль «Работа»</small></div></div>' : '') +
+        '</div>';
+    const pend = st.pending ? '<div class="preview" style="padding:12px 14px"><b>Отправлено на ПК: ' + esc(PC_CMD[st.pending.cmd] || st.pending.cmd) + '…</b>' +
+      '<div class="note" style="margin:4px 0 0">' + (st.online ? 'ПК заберёт команду в течение нескольких секунд.' : 'ПК сейчас не на связи. Если он не появится за 2 минуты, команда отменится.') + '</div></div>' : '';
+    const last = st.last ? '<div class="list"><div class="li">' + dot(st.last.ok ? 'var(--ok)' : 'var(--warn)') + '<div><b>' + esc(PC_CMD[st.last.cmd] || st.last.cmd) + '</b><small>' + esc(st.last.text) + '</small></div><time>' + esc(st.last.at.slice(-8, -3)) + '</time></div></div>' : '';
+    const dis = !st.configured || P.busy || st.pending ? ' disabled' : '';
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' + status +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="send" data-pc="start"' + dis + '>🟢 Начать работу</button>' +
+        '<button class="btn2" data-pc="stop"' + dis + '>🔴 Завершить</button>' +
+        '<button class="btn2" data-pc="refresh"' + (P.busy ? ' disabled' : '') + '>ℹ️ Статус</button></div>' +
+      pend + (last ? '<div><div class="qh" style="margin-bottom:8px">Последний результат</div>' + last + '</div>' : '') +
+      '<div class="note">«Начать работу» открывает рабочий Brave с вкладками, «Завершить» закрывает только его — обычный Brave не трогается. Результат придёт и сообщением в бот.</div></div>';
+  }
+  $('#pc-body').addEventListener('click', async e => {
+    const b = e.target.closest('[data-pc]'); if (!b || P.busy) return;
+    haptic();
+    if (b.dataset.pc === 'refresh') { P.busy = true; renderPc(); await loadPc(); P.busy = false; renderPc(); pcTick(); return; }
+    P.busy = true; renderPc();
+    try { P.st = (await api('pcCommand', {cmd: b.dataset.pc})).pc; toast('Отправлено на ПК…'); haptic('ok'); }
+    catch (err) { haptic('err'); toast(err.message); }
+    P.busy = false; renderPc(); pcTick();
+  });
+
   /* ---------- РАССЫЛКА ---------- */
   function renderSend() {
     const blocks = [['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
@@ -1339,7 +1395,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   /* ---------- Навигация ---------- */
-  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', dates: 's-dates', tt: 's-tt', send: 's-send', history: 's-history'};
+  const SCREENS = {home: 's-home', checks: 's-checks', sos: 's-sos', an: 's-an', dates: 's-dates', tt: 's-tt', pc: 's-pc', send: 's-send', history: 's-history'};
   let current = 'home';
   function go(key) {
     current = key;
@@ -1351,13 +1407,14 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     document.querySelectorAll('.tab').forEach(t => t.dataset.go === key ? t.setAttribute('aria-current', 'page') : t.removeAttribute('aria-current'));
     const form = key === 'checks' || key === 'sos' || key === 'an';
     $('#dock').hidden = !form;
-    $('#tabs').hidden = form || key === 'dates' || key === 'tt';
+    $('#tabs').hidden = form || key === 'dates' || key === 'tt' || key === 'pc';
     if (tg && tg.BackButton) key === 'home' ? tg.BackButton.hide() : tg.BackButton.show();
     window.scrollTo(0, 0);
     if (key === 'checks' && !state.sums[state.period]) loadSummary(state.period);
     // SOS: показываем сохранённое сразу и обновляем в фоне
     if (key === 'sos' && !S.loading) loadSos();
     if (key === 'dates') loadDates();
+    if (key === 'pc') { renderPc(); loadPc().then(pcTick); }
     if (key === 'tt') { if (T.region) loadTtRegion(T.region, !!T.data[T.region]); else loadTtOverview(); ttPrefetch(); }
     if (key === 'an' && !A.loading && !(A.sums[anKey()] && A.sums[anKey()].regions)) loadAn();
     renderAll();
@@ -1380,7 +1437,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   document.addEventListener('click', e => {
     const g = e.target.closest('[data-go]'); if (g) { haptic(); go(g.dataset.go); return; }
-    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : r.dataset.retry === 'tt' ? (T.region ? loadTtRegion(T.region) : loadTtOverview()) : loadSummary(r.dataset.retry, true); return; }
+    const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : r.dataset.retry === 'tt' ? (T.region ? loadTtRegion(T.region) : loadTtOverview()) : r.dataset.retry === 'pc' ? loadPc() : loadSummary(r.dataset.retry, true); return; }
     const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   });
   $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
