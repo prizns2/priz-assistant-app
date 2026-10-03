@@ -412,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '03.10 · 38';
+  const APP_VERSION = '03.10 · 39';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -1333,7 +1333,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   /* ---------- РАССЫЛКА ---------- */
   // Напоминание регионам: само — ПТ 14:00 и ВС 16:00; кнопка — собрать сейчас (СБ/ВС — за ПТ–ВС, иначе за ПН–ПТ)
-  const remindBtn = () => '<div class="note" style="margin-top:10px">🔔 Напоминание регионам приходит само: ПТ в 14:00 (ФТ и Рулька) и ВС в 16:00 (только ФТ).</div>' +
+  const remindBtn = () => '<div class="note" style="margin-top:10px">🔔 Напоминание в общую группу регионов готовится само: ПТ в 14:00 и ВС в 16:00.</div>' +
     '<button class="btn2" id="remind-now" style="margin-top:8px"' + (state.remindBusy ? ' disabled' : '') + '>' + (state.remindBusy ? 'Готовлю…' : 'Сделать напоминание сейчас') + '</button>';
   document.addEventListener('click', async e => {
     if (!e.target.closest('#remind-now') || state.remindBusy) return;
@@ -1371,7 +1371,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       const items = Object.values(b.items), ready = items.filter(i => i.preparedId);
       const done = ready.filter(i => i.sent).length, rest = ready.length - done, frac = ready.length ? done / ready.length : 0;
       const title = ({sos: 'Камеры SOS', an: 'Аналитика', remind: 'Напоминание регионам'}[kind] || 'Чеки') + ' · ' + b.period.label;
-      const hint = {sos: 'Нажми «Отправить» и выбери группу «Камеры SOS».', an: 'Нажми «Отправить» и выбери чат директора.'}[kind] || 'Нажми «Отправить» и выбери группу региона.';
+      const hint = {sos: 'Нажми «Отправить» и выбери группу «Камеры SOS».', an: 'Нажми «Отправить» и выбери чат директора.', remind: 'Нажми «Отправить» и выбери общую группу регионов.'}[kind] || 'Нажми «Отправить» и выбери группу региона.';
       const group = (net, label) => {
         const g = items.filter(i => i.net === net); if (!g.length) return '';
         const r = g.filter(i => i.preparedId);
@@ -1381,7 +1381,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
           '<circle class="bgc" cx="50" cy="50" r="40"/><circle class="fg" cx="50" cy="50" r="40" stroke-dasharray="' + C + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 50 50)"/>' +
           '<text x="50" y="57" text-anchor="middle">' + done + '/' + ready.length + '</text></svg>' +
           '<div><b>' + esc(title) + '</b><p>' + (rest ? 'Осталось ' + rest + '. ' + hint : 'Всё отправлено.') + '</p></div></div>' +
-        '<div class="queue">' + (kind === 'sos' ? group('sos', 'Регионы') : kind === 'an' ? group('an', 'Документы') : group('ft', NETS.ft) + group('r', NETS.r)) + '</div>';
+        '<div class="queue">' + (kind === 'remind' ? group('all', 'Сообщение') : kind === 'sos' ? group('sos', 'Регионы') : kind === 'an' ? group('an', 'Документы') : group('ft', NETS.ft) + group('r', NETS.r)) + '</div>';
     };
     $('#send-body').innerHTML =
       '<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs></svg>' +
