@@ -412,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '03.10 · 39';
+  const APP_VERSION = '03.10 · 40';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -1393,8 +1393,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   $('#send-body').addEventListener('click', e => {
     const b = e.target.closest('[data-send]'); if (!b) return;
-    const kind = ['sos', 'an'].includes(b.dataset.kind) ? b.dataset.kind : 'checks';
-    const batch = {sos: state.sosBatch, an: state.anBatch}[kind] || state.batch;
+    const kind = ['sos', 'an', 'remind'].includes(b.dataset.kind) ? b.dataset.kind : 'checks';
+    const batch = {sos: state.sosBatch, an: state.anBatch, remind: state.remindBatch}[kind] || state.batch;
     const it = batch && batch.items[b.dataset.send]; if (!it) return;
     if (!tg || !tg.shareMessage || !tg.isVersionAtLeast('8.0')) { toast('Обнови Telegram: нужна версия с поддержкой отправки из приложений'); return; }
     haptic();
