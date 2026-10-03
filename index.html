@@ -412,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '02.10 · 37';
+  const APP_VERSION = '03.10 · 38';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -420,7 +420,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
                   sos: { period: 'mm', from: '', to: '', region: 'all', sums: {}, loading: false },
                   an: { net: 'ft', month: '', region: 'all', sums: {}, loading: false }, anBatch: null };
   // Каждый ответ сервера несёт все пачки и историю
-  const applyState = d => { state.batch = d.batch || null; state.sosBatch = d.sosBatch || null; state.anBatch = d.anBatch || null; state.history = d.history || []; };
+  const applyState = d => { state.batch = d.batch || null; state.sosBatch = d.sosBatch || null; state.anBatch = d.anBatch || null; state.remindBatch = d.remindBatch || null; state.history = d.history || []; };
 
   /* ---------- API ---------- */
   async function api(action, body) {
@@ -449,7 +449,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       const sums = {};
       Object.keys(state.sums).forEach(k => { if (state.sums[k] && state.sums[k].regions) sums[k] = state.sums[k]; });
       const sos = state.sos.sums.mm && state.sos.sums.mm.regions ? {mm: state.sos.sums.mm} : {};
-      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, sos, batch: state.batch, sosBatch: state.sosBatch, anBatch: state.anBatch, history: state.history}));
+      localStorage.setItem(STORE_KEY, JSON.stringify({day: dayStamp(), sums, sos, batch: state.batch, sosBatch: state.sosBatch, anBatch: state.anBatch, remindBatch: state.remindBatch, history: state.history}));
     } catch (e) {}
   }
   function restoreLocal() {
@@ -1332,19 +1332,30 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
 
   /* ---------- РАССЫЛКА ---------- */
+  // Напоминание регионам: само — ПТ 14:00 и ВС 16:00; кнопка — собрать сейчас (СБ/ВС — за ПТ–ВС, иначе за ПН–ПТ)
+  const remindBtn = () => '<div class="note" style="margin-top:10px">🔔 Напоминание регионам приходит само: ПТ в 14:00 (ФТ и Рулька) и ВС в 16:00 (только ФТ).</div>' +
+    '<button class="btn2" id="remind-now" style="margin-top:8px"' + (state.remindBusy ? ' disabled' : '') + '>' + (state.remindBusy ? 'Готовлю…' : 'Сделать напоминание сейчас') + '</button>';
+  document.addEventListener('click', async e => {
+    if (!e.target.closest('#remind-now') || state.remindBusy) return;
+    state.remindBusy = true; renderSend(); haptic();
+    try { applyState(await api('remindBuild')); saveLocal(); toast('Напоминание готово — отправляй по группам'); haptic('ok'); }
+    catch (err) { haptic('err'); toast(err.message); }
+    state.remindBusy = false; renderSend();
+  });
+
   function renderSend() {
-    const blocks = [['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
+    const blocks = [['remind', state.remindBatch], ['checks', state.batch], ['sos', state.sosBatch], ['an', state.anBatch]].filter(([, b]) => b && Object.keys(b.items).length);
     const left = blocks.reduce((n, [, b]) => n + Object.values(b.items).filter(i => i.preparedId && !i.sent).length, 0);
     $('#pip').hidden = !left; $('#pip').textContent = left;
 
     if (!blocks.length) {
-      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в любом модуле.</div></div>' +
+      $('#send-body').innerHTML = '<div class="list"><div class="empty">Здесь появятся файлы для отправки по группам.<br>Сформируй отчёт в любом модуле.</div></div>' + remindBtn() +
         '<div style="display:flex;gap:8px;margin-top:14px"><button class="btn2" data-go="checks">Открыть чеки</button><button class="btn2" data-go="sos">Камеры SOS</button><button class="btn2" data-go="an">Аналитика</button></div>';
       return;
     }
     const now = Date.now() / 1000, C = 251.3;
     const item = (kind, i) => {
-      const what = kind === 'sos' ? i.count + ' ' + plural(i.count, 'запись', 'записи', 'записей')
+      const what = kind === 'remind' ? 'текст напоминания' : kind === 'sos' ? i.count + ' ' + plural(i.count, 'запись', 'записи', 'записей')
         : kind === 'an' ? i.count + ' ' + plural(i.count, 'нарушение', 'нарушения', 'нарушений')
         : i.count + ' стр. · ' + money(i.sum) + ' ₴';
       let cls = '', btn, meta = '<small class="num">' + what + '</small>';
@@ -1354,12 +1365,12 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       else if (i.empty && !i.preparedId) { cls = ' muted'; btn = '<button class="send" disabled>Нет чеков</button>'; }
       else if (i.expires && i.expires < now) { cls = ' muted'; btn = '<button class="send" disabled>Истёк</button>'; meta = '<small class="err">Сформируй заново</small>'; }
       else { btn = send; if (i.empty) meta = '<small>сообщение «данных не обнаружено»</small>'; }
-      return '<div class="q' + cls + '"><span class="xl">' + (i.empty ? 'TXT' : kind === 'an' ? 'DOCX' : 'XLSX') + '</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
+      return '<div class="q' + cls + '"><span class="xl">' + (i.empty || kind === 'remind' ? 'TXT' : kind === 'an' ? 'DOCX' : 'XLSX') + '</span><div><b>' + esc(i.name) + '</b>' + meta + '</div>' + btn + '</div>';
     };
     const block = ([kind, b]) => {
       const items = Object.values(b.items), ready = items.filter(i => i.preparedId);
       const done = ready.filter(i => i.sent).length, rest = ready.length - done, frac = ready.length ? done / ready.length : 0;
-      const title = ({sos: 'Камеры SOS', an: 'Аналитика'}[kind] || 'Чеки') + ' · ' + b.period.label;
+      const title = ({sos: 'Камеры SOS', an: 'Аналитика', remind: 'Напоминание регионам'}[kind] || 'Чеки') + ' · ' + b.period.label;
       const hint = {sos: 'Нажми «Отправить» и выбери группу «Камеры SOS».', an: 'Нажми «Отправить» и выбери чат директора.'}[kind] || 'Нажми «Отправить» и выбери группу региона.';
       const group = (net, label) => {
         const g = items.filter(i => i.net === net); if (!g.length) return '';
@@ -1374,7 +1385,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     };
     $('#send-body').innerHTML =
       '<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#D66BF0"/></linearGradient></defs></svg>' +
-      '<div style="display:flex;flex-direction:column;gap:14px">' + blocks.map(block).join('') +
+      '<div style="display:flex;flex-direction:column;gap:14px">' + blocks.map(block).join('') + remindBtn() +
       '<div class="hint"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>' +
         '<span>Сообщение уходит от тебя с пометкой «via бот», а его копия из чата с ботом удаляется. Если группа не принимает сообщения через ботов, перешли файл из чата с ботом до отправки.</span></div>' +
       '</div>';
