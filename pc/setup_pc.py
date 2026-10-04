@@ -1,6 +1,7 @@
 """Установка / удаление агента рабочего ПК. Запускается из install.bat и uninstall.bat."""
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -116,10 +117,44 @@ def resolve_one(path):
             d = json.loads(out)
         except ValueError:
             d = {}
-        if d.get('target') and os.path.exists(d['target']):
-            return {'path': d['target'], 'args': d.get('args') or '', 'workdir': d.get('workdir') or ''}
-        return {'path': path, 'args': '', 'workdir': ''}
+        return from_shortcut(path, d.get('target'), d.get('args'), d.get('workdir'))
     return {'path': path, 'args': '', 'workdir': ''}
+
+
+# Ярлык, который запускает скрипт через такую программу, запускаем как двойной щелчок по самому ярлыку
+SCRIPT_HOSTS = ('powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe',
+                'python.exe', 'pythonw.exe', 'py.exe', 'pyw.exe')
+
+
+def is_script_host(path):
+    return os.path.basename(str(path or '').strip().strip('"')).lower() in SCRIPT_HOSTS
+
+
+def from_shortcut(lnk, target, args, workdir):
+    """Что записать в config.json для ярлыка.
+    Обычная программа — сам .exe с параметрами; скрипт (PowerShell, python, .bat…) — сам ярлык, а узнавать
+    и закрывать его будем по папке скрипта (все процессы, запущенные оттуда)."""
+    target, args, workdir = (target or '').strip(), args or '', workdir or ''
+    if target and os.path.exists(target) and not is_script_host(target):
+        return {'path': target, 'args': args, 'workdir': workdir}
+    res = {'path': lnk, 'args': '', 'workdir': ''}
+    if is_script_host(target):
+        m = re.search(r'([A-Za-z]:\\[^"]+?\.(?:ps1|py|pyw|bat|cmd|vbs|js))', args)
+        folder = os.path.dirname(m.group(1)) if m else workdir
+        if folder:
+            res['processes'] = [os.path.normcase(folder.rstrip('\\')) + '\\']
+    return res
+
+
+def apply_found(app, got):
+    app['path'], app['args'], app['workdir'] = got['path'], got['args'], got['workdir']
+    if got.get('processes'):  # скрипт — узнаём по его папке
+        app['processes'] = got['processes']
+
+
+def name_key(s):
+    """Для поиска по названию: без регистра и без удвоенных букв («PrizzPss» = «PrizPSS»)."""
+    return re.sub(r'(.)\1+', r'\1', str(s).lower())
 
 
 def ask_missing(apps):
@@ -142,7 +177,7 @@ def ask_missing(apps):
                 break
             got = resolve_one(ans)
             if got:
-                app.update(got)
+                apply_found(app, got)
                 print('   ✅ %s — %s %s' % (app['name'], got['path'], got['args']))
                 break
             print('   Не нашёл такой файл, попробуй ещё раз.')
@@ -159,27 +194,24 @@ def find_apps(cfg, write):
     print('Программы:')
     for app in apps:
         cur = (app.get('path') or '').strip().strip('"')
-        if cur and os.path.exists(cur):
+        # Скрипт, записанный как «powershell.exe + параметры», переделываем на запуск через ярлык
+        if cur and os.path.exists(cur) and not is_script_host(cur):
             print('  ✅ %s — %s (уже вписана)' % (app['name'], cur))
             continue
-        terms = [t.lower() for t in app.get('find') or [app['name']]]
+        terms = [name_key(t) for t in app.get('find') or [app['name']]] + [name_key(app['name'])]
         hit = None
         for sc in desk + menu:
             name = os.path.splitext(os.path.basename(sc['lnk']))[0].lower()
-            if any(t in name for t in terms) and not any(x in name for x in EXCLUDE):
+            if any(t in name_key(name) for t in terms) and not any(x in name for x in EXCLUDE):
                 hit = sc
                 break
         if not hit:
             print('  ❌ %s — ярлык не найден' % app['name'])
             continue
-        target = (hit.get('target') or '').strip()
-        if target and os.path.exists(target):
-            path, args, wd = target, hit.get('args') or '', hit.get('workdir') or ''
-        else:  # ярлык без обычного пути (магазинные и т.п.) — запускаем сам ярлык
-            path, args, wd = hit['lnk'], '', ''
-        print('  ✅ %s — %s %s' % (app['name'], path, args))
+        got = from_shortcut(hit['lnk'], hit.get('target'), hit.get('args'), hit.get('workdir'))
+        print('  ✅ %s — %s %s' % (app['name'], got['path'], got['args']))
         if write:
-            app['path'], app['args'], app['workdir'] = path, args, wd
+            apply_found(app, got)
 
 
 def stop_agent():
