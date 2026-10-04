@@ -22,6 +22,7 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, 'config.json')
 BROWSER = os.path.join(HERE, 'browser.json')
+APPS_OVERRIDE = os.path.join(HERE, 'apps.json')
 TABS_JSON = os.path.join(HERE, 'extension', 'tabs.json')
 BOOKMARKS_JSON = os.path.join(HERE, 'extension', 'bookmarks.json')
 LOG_DIR = os.path.join(HERE, 'logs')
@@ -61,6 +62,18 @@ def load_config():
         with open(BROWSER, encoding='utf-8') as f:
             cfg.update({k: v for k, v in json.load(f).items() if k in ('tabs', 'bookmarks', 'bookmarks_account')})
     cfg.setdefault('tabs', [])
+    # apps.json — уточнения программ по названию (приезжают с обновлением, config.json не трогают).
+    # Путь из уточнения берём, только если такой файл есть на этом ПК.
+    if os.path.exists(APPS_OVERRIDE):
+        with open(APPS_OVERRIDE, encoding='utf-8') as f:
+            over = json.load(f)
+        for app in cfg.get('apps') or []:
+            o = over.get(app.get('name'))
+            if not o:
+                continue
+            if o.get('path') and not os.path.exists(os.path.expandvars(o['path'])):
+                o = {k: v for k, v in o.items() if k not in ('path', 'args', 'workdir')}
+            app.update(o)
     # config.json мог приехать с другого ПК (другой пользователь Windows) — чужие пути заменяем своими
     profile = os.path.expandvars(cfg.get('profile_dir') or '')
     if not profile or not os.path.isdir(os.path.dirname(profile)):
