@@ -206,48 +206,119 @@ def app_matchers(app):
                 paths.append(os.path.normcase(arg))
         else:
             paths.append(os.path.normcase(path))
+    # Файл (.rdp, документ): программа открывает его с путём в командной строке — по нему и узнаём
+    if path and not path.lower().endswith(('.exe', '.lnk')):
+        paths.append(os.path.normcase(path))
     names = [n for n in names if n.rstrip('*') not in GENERIC]
     return names, paths
 
 
-def app_processes(app):
-    names, paths = app_matchers(app)
-    if not names and not paths:
-        return []
-    me, out = os.getpid(), []
-    for p in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+# Какие процессы агент сам запустил для каждой программы (pid + время создания — защита от повторного pid).
+# Нужно для ярлыков и файлов (.lnk, .rdp), у которых заранее не известно, как называется процесс.
+STATE = os.path.join(HERE, 'agent_state.json')
+NOT_APP = {'brave.exe', 'taskkill.exe', 'conhost.exe'}
+
+
+def _state():
+    try:
+        with open(STATE, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_state(s):
+    try:
+        with open(STATE, 'w', encoding='utf-8') as f:
+            json.dump(s, f)
+    except OSError:
+        log.warning('Не удалось сохранить agent_state.json')
+
+
+def tracked_processes(name):
+    out = []
+    for rec in _state().get(name, []):
         try:
-            if p.info['pid'] == me:
-                continue
-            n = (p.info['name'] or '').lower()
-            hit = any(n.startswith(x[:-1]) if x.endswith('*') else n == x for x in names)
-            if not hit and paths:
-                hay = os.path.normcase((p.info['exe'] or '') + ' ' + ' '.join(p.info['cmdline'] or []))
-                hit = any(x in hay for x in paths)
-            if hit:
+            p = psutil.Process(rec['pid'])
+            if abs(p.create_time() - rec['ct']) < 1:
                 out.append(p)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, KeyError):
             continue
     return out
 
 
-def start_app(app):
+def app_processes(app):
+    names, paths = app_matchers(app)
+    me, found = os.getpid(), {}
+    if names or paths:
+        for p in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
+            try:
+                if p.info['pid'] == me:
+                    continue
+                n = (p.info['name'] or '').lower()
+                hit = any(n.startswith(x[:-1]) if x.endswith('*') else n == x for x in names)
+                if not hit and paths:
+                    hay = os.path.normcase((p.info['exe'] or '') + ' ' + ' '.join(p.info['cmdline'] or []))
+                    hit = any(x in hay for x in paths)
+                if hit:
+                    found[p.pid] = p
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    # плюс то, что агент сам запускал для этой программы, и их дочерние процессы
+    for p in tracked_processes(app['name']):
+        found[p.pid] = p
+        try:
+            for c in p.children(recursive=True):
+                found[c.pid] = c
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    found.pop(me, None)
+    return list(found.values())
+
+
+def launch_app(app):
+    """Запуск программы; возвращает pid процессов, которые появились у агента сразу после запуска."""
     path = (app.get('path') or '').strip().strip('"')
-    if not path:
-        return False, 'не найдена на этом ПК'
-    if not os.path.exists(path):
-        return False, 'нет файла ' + path
-    if app_processes(app):
-        return True, 'уже была открыта'
     workdir = app.get('workdir') or os.path.dirname(path)
+    t0 = time.time()
     if path.lower().endswith('.exe'):
         import shlex
         args = shlex.split(app.get('args') or '', posix=False)
         subprocess.Popen([path] + args, cwd=workdir if os.path.isdir(workdir) else None,
                          creationflags=DETACHED, close_fds=True)
     else:
-        os.startfile(path)  # ярлык, .bat, документ — как двойной щелчок
-    return True, 'запущена'
+        os.startfile(path)  # ярлык, .rdp, .bat, документ — как двойной щелчок
+    pids = set()
+    for _ in range(4):
+        time.sleep(0.5)
+        try:
+            for c in psutil.Process().children():
+                if c.create_time() >= t0 - 0.5 and c.name().lower() not in NOT_APP:
+                    pids.add(c.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return pids
+
+
+def remember_launched(launched, seconds=8):
+    """Несколько секунд собираем дочерние процессы запущенного (лаунчер → сама программа) и запоминаем."""
+    t_start = time.time()
+    while time.time() - t_start < seconds:
+        for p in psutil.process_iter(['pid', 'ppid', 'name']):
+            for pids in launched.values():
+                if p.info['ppid'] in pids and (p.info['name'] or '').lower() not in NOT_APP:
+                    pids.add(p.info['pid'])
+        time.sleep(1)
+    s = _state()
+    for name, pids in launched.items():
+        recs = []
+        for pid in pids:
+            try:
+                recs.append({'pid': pid, 'ct': psutil.Process(pid).create_time()})
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        s[name] = recs
+    _save_state(s)
 
 
 def start_work(cfg):
@@ -255,16 +326,26 @@ def start_work(cfg):
     ok, text = start_brave(cfg)
     ok_all &= ok
     lines.append(('✅ ' if ok else '⚠️ ') + text)
+    launched = {}
     for app in cfg.get('apps') or []:
-        if not app.get('path'):
+        path = (app.get('path') or '').strip().strip('"')
+        if not path:
             lines.append('— ' + app['name'] + ' — не найдена на этом ПК (впиши path в config.json)')
             continue
         try:
-            ok, text = start_app(app)
+            if not os.path.exists(path):
+                ok, text = False, 'нет файла ' + path
+            elif app_processes(app):
+                ok, text = True, 'уже была открыта'
+            else:
+                launched[app['name']] = launch_app(app)
+                ok, text = True, 'запущена'
         except Exception as e:  # noqa: BLE001
             ok, text = False, 'ошибка запуска: %s' % e
         ok_all &= ok
         lines.append(('✅ ' if ok else '⚠️ ') + app['name'] + ' — ' + text)
+    if launched:
+        remember_launched(launched)  # чтобы «Завершить» знал, что закрывать
     return ok_all, '\n'.join(lines)
 
 
