@@ -199,12 +199,13 @@ def find_apps(cfg, write):
             print('  ✅ %s — %s (уже вписана)' % (app['name'], cur))
             continue
         terms = [name_key(t) for t in app.get('find') or [app['name']]] + [name_key(app['name'])]
-        hit = None
+        # Сначала ярлык с точно таким названием, потом — где название лишь содержит искомое
+        cands = []
         for sc in desk + menu:
             name = os.path.splitext(os.path.basename(sc['lnk']))[0].lower()
             if any(t in name_key(name) for t in terms) and not any(x in name for x in EXCLUDE):
-                hit = sc
-                break
+                cands.append((0 if name_key(name).strip() in terms else 1, sc))
+        hit = min(cands, key=lambda c: c[0])[1] if cands else None
         if not hit:
             print('  ❌ %s — ярлык не найден' % app['name'])
             continue
