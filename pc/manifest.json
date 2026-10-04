@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Рабочие вкладки (PRIZ)",
+  "version": "1.2",
+  "description": "При запуске рабочего Brave открывает вкладки из tabs.json и закрепляет нужные.",
+  "permissions": ["tabs"],
+  "background": { "service_worker": "background.js" }
+}
