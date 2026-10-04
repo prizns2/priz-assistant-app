@@ -21,6 +21,7 @@ import requests
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, 'config.json')
+BROWSER = os.path.join(HERE, 'browser.json')
 TABS_JSON = os.path.join(HERE, 'extension', 'tabs.json')
 BOOKMARKS_JSON = os.path.join(HERE, 'extension', 'bookmarks.json')
 LOG_DIR = os.path.join(HERE, 'logs')
@@ -54,6 +55,12 @@ BRAVE_PATHS = (r'%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.ex
 def load_config():
     with open(CONFIG, encoding='utf-8') as f:
         cfg = json.load(f)
+    # Вкладки и закладки — в browser.json (общий для всех ПК, приезжает с обновлением),
+    # config.json — настройки этого ПК (ключ, пути, программы) и при обновлении не трогается
+    if os.path.exists(BROWSER):
+        with open(BROWSER, encoding='utf-8') as f:
+            cfg.update({k: v for k, v in json.load(f).items() if k in ('tabs', 'bookmarks', 'bookmarks_account')})
+    cfg.setdefault('tabs', [])
     # config.json мог приехать с другого ПК (другой пользователь Windows) — чужие пути заменяем своими
     profile = os.path.expandvars(cfg.get('profile_dir') or '')
     if not profile or not os.path.isdir(os.path.dirname(profile)):
