@@ -22,6 +22,7 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, 'config.json')
 TABS_JSON = os.path.join(HERE, 'extension', 'tabs.json')
+BOOKMARKS_JSON = os.path.join(HERE, 'extension', 'bookmarks.json')
 LOG_DIR = os.path.join(HERE, 'logs')
 PID_FILE = os.path.join(HERE, 'agent.pid')
 
@@ -93,6 +94,30 @@ def write_tabs(cfg):
              'pinned': bool(t.get('pinned'))} for t in cfg['tabs']]
     with open(TABS_JSON, 'w', encoding='utf-8') as f:
         json.dump(tabs, f, ensure_ascii=False, indent=2)
+    write_bookmarks(cfg)
+
+
+GOOGLE_HOSTS = ('docs.google.com', 'drive.google.com', 'script.google.com', 'sheets.google.com')
+
+
+def write_bookmarks(cfg):
+    """Закладки для расширения: ссылкам Google подставляем аккаунт bookmarks_account."""
+    account = cfg.get('bookmarks_account', '')
+
+    def conv(nodes):
+        out = []
+        for n in nodes or []:
+            if 'children' in n:
+                out.append({'title': n['title'], 'children': conv(n['children'])})
+            else:
+                url = n['url']
+                if account and urlsplit(url).netloc.lower() in GOOGLE_HOSTS:
+                    url = with_account(url, account)
+                out.append({'title': n['title'], 'url': url})
+        return out
+
+    with open(BOOKMARKS_JSON, 'w', encoding='utf-8') as f:
+        json.dump(conv(cfg.get('bookmarks')), f, ensure_ascii=False, indent=2)
 
 
 # ---------- рабочий Brave ----------
@@ -288,6 +313,10 @@ def main():
         f.write(str(os.getpid()))
     host = socket.gethostname()
     log.info('Агент запущен (%s)', host)
+    try:  # чтобы расширение получило вкладки и закладки сразу, а не только после «Начать работу»
+        write_tabs(load_config())
+    except Exception:  # noqa: BLE001
+        log.exception('Не удалось записать tabs.json / bookmarks.json')
     done = set()
     offline = False
     while True:

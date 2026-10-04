@@ -24,7 +24,46 @@ function pageKey(u) {
 const exactTab = (tab, item) => pageKey(tab.pendingUrl || tab.url) === item.match;
 const insideTab = (tab, item) => pageKey(tab.pendingUrl || tab.url).startsWith(item.match + '/');
 
-chrome.runtime.onStartup.addListener(() => { setupWorkTabs(); });
+chrome.runtime.onStartup.addListener(() => { setupWorkTabs(); syncBookmarks(); });
+// После установки или обновления расширения (кнопка ⟳ в brave://extensions) — закладки сразу
+chrome.runtime.onInstalled.addListener(() => { syncBookmarks(); });
+
+// Закладки из bookmarks.json (пишет агент) — на панель закладок, с папками и по порядку.
+// Уже есть такая (та же страница или то же название) — не дублируем, а обновляем; свои закладки пользователя не трогаем.
+async function syncBookmarks() {
+  let list;
+  try {
+    list = await (await fetch(chrome.runtime.getURL('bookmarks.json'), { cache: 'no-store' })).json();
+  } catch (e) {
+    return;
+  }
+  if (!Array.isArray(list) || !list.length) return;
+  const tree = await chrome.bookmarks.getTree();
+  const bar = tree[0].children[0]; // «Панель закладок»
+  const norm = s => String(s || '').trim().toLowerCase();
+  async function sync(parentId, nodes) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const children = await chrome.bookmarks.getChildren(parentId);
+      let bm;
+      if (node.children) {
+        bm = children.find(c => !c.url && norm(c.title) === norm(node.title)) ||
+             await chrome.bookmarks.create({ parentId, title: node.title });
+        await sync(bm.id, node.children);
+      } else {
+        bm = children.find(c => c.url && pageKey(c.url) === pageKey(node.url)) ||
+             children.find(c => c.url && norm(c.title) === norm(node.title));
+        if (bm) {
+          if (bm.url !== node.url || bm.title !== node.title) bm = await chrome.bookmarks.update(bm.id, { title: node.title, url: node.url });
+        } else {
+          bm = await chrome.bookmarks.create({ parentId, title: node.title, url: node.url });
+        }
+      }
+      try { await chrome.bookmarks.move(bm.id, { parentId, index: i }); } catch (e) { /* не страшно */ }
+    }
+  }
+  await sync(bar.id, list);
+}
 
 async function setupWorkTabs() {
   let list;
