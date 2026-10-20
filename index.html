@@ -1079,6 +1079,15 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
 
   function renderTt() {
     const back = $('#tt-back-txt'), title = $('#tt-title'), body = $('#tt-body');
+    // Поле формы, в котором сейчас курсор, — вернуть в него фокус после перерисовки
+    const ae = document.activeElement, focusName = ae && ae.closest && ae.closest('#tt-form') ? ae.name : null;
+    try { renderTtBody(back, title, body); } finally {
+      const i = focusName && $('#tt-form input[name="' + focusName + '"]');
+      if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) { /* date */ } }
+    }
+  }
+
+  function renderTtBody(back, title, body) {
     if (!T.region) {
       back.textContent = 'Главная'; title.textContent = 'ТТ и операторы';
       if (T.err) { body.innerHTML = errCard(T.err, 'tt'); return; }
@@ -1202,7 +1211,8 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   });
   $('#tt-body').addEventListener('input', e => {
     if (e.target.id === 'tt-q') { T.q = e.target.value; T.keepFocus = true; renderTt(); }
-    else if (e.target.closest('#tt-form')) { T.plan = null; }
+    // Набранное сразу в T.form: экран перерисовывается, когда в фоне приходят свежие данные региона
+    else if (e.target.closest('#tt-form')) { if (T.form && e.target.name) T.form[e.target.name] = e.target.value; T.plan = null; }
   });
   $('#tt-body').addEventListener('click', async e => {
     const reg = e.target.closest('[data-reg]');
