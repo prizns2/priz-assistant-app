@@ -412,7 +412,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   const money = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}).replace(/ /g, ' ');
   const plural = (n, a, b, c) => { const x = Math.abs(n) % 100, y = x % 10; return x > 10 && x < 20 ? c : y > 1 && y < 5 ? b : y === 1 ? a : c; };
   const NETS = {ft: 'ФТ', r: 'Рулька'};
-  const APP_VERSION = '03.10 · 40';
+  const APP_VERSION = '31.10 · 41';
 
   // По умолчанию: в СБ–ВС — выходные (отправка в ВС 18:00), иначе ПН–ПТ (отправка в ПТ 16:00)
   const DEFAULT_PERIOD = [0, 6].includes(new Date().getDay()) ? 'we' : 'wd';
@@ -463,7 +463,6 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   async function loadSummary(period, fresh) {
     state.loading[period] = true;
     if (period === state.period) renderChecks();
-    if (period === 'week') renderHome();
     try {
       const d = await api('summary', {period, fresh: !!fresh});
       if (fresh) Object.keys(state.sums).forEach(k => { if (k !== period) delete state.sums[k]; });
@@ -487,45 +486,16 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   if (u && u.first_name) $('#hello-name').textContent = u.first_name;
 
   function renderHome() {
-    const s = state.sums.week;
-    $('#refresh').classList.toggle('spin', !!state.loading.week);
+    $('#refresh').classList.toggle('spin', !!state.loading.home);
     if (!tg || !tg.initData) {
       $('#home-body').innerHTML = '<div class="errcard"><b>Откройте через Telegram</b><p>Приложение работает только внутри бота: нажмите кнопку «Помощник» в чате с ботом.</p></div>';
       return;
     }
-    if (!s || (state.loading.week && !s.regions)) {
-      $('#home-body').innerHTML = '<div style="display:flex;flex-direction:column;gap:18px">' +
-        '<div class="skel" style="height:230px;border-radius:24px"></div>' +
-        '<div class="skel" style="height:150px"></div><div class="note">Читаю 14 таблиц… первый раз это до 30 секунд</div></div>';
-      return;
-    }
-    if (s.error) { $('#home-body').innerHTML = errCard(s.error, 'week'); return; }
-
-    const total = s.totals.ft.sum + s.totals.r.sum, count = s.totals.ft.count + s.totals.r.count;
-    let delta = '';
-    if (s.prevTotal) {
-      const p = Math.round((total - s.prevTotal) / s.prevTotal * 100);
-      delta = p === 0 ? '<span class="chip">как прошлые 7 дней</span>'
-        : '<span class="chip ' + (p > 0 ? 'up' : 'down') + ' num">' + (p > 0 ? '▲ ' : '▼ ') + Math.abs(p) + '% к прошлым 7 дням</span>';
-    }
-    const top = s.regions.filter(r => r.sum > 0).sort((a, b) => b.sum - a.sum).slice(0, 5);
-    const mx = top.length ? top[0].sum : 1;
-    const broken = s.regions.filter(r => r.error);
-
+    // Сводка «Не оплачено» с главной убрана (31.10.2026): её прогрев тратил ~35 мин лимита триггеров в сутки.
+    // Цифры по чекам считаются при открытии модуля «Неоплаченные чеки».
+    const count = 0;
     $('#home-body').innerHTML =
       '<div style="display:flex;flex-direction:column;gap:18px">' +
-      '<div class="hero"><div class="eyebrow">Не оплачено · ' + esc(s.range.label) + '</div>' +
-        '<div class="big num" id="hero-sum">' + money(total) + '<span>₴</span></div>' +
-        '<div class="hero-meta"><span class="chip num">' + count + ' ' + plural(count, 'чек', 'чека', 'чеков') + '</span>' + delta + '</div>' +
-        spark(s.days) +
-        '<div class="spark-days">' + s.days.map(d => '<span>' + d.label + '</span>').join('') + '</div>' +
-        '<div class="updated">Обновлено в ' + esc(s.updatedAt || '') + ' · ФТ ' + money(s.totals.ft.sum) + ' ₴ · Рулька ' + money(s.totals.r.sum) + ' ₴</div>' +
-      '</div>' +
-      (broken.length ? '<div class="warnbox">Не удалось прочитать: ' + broken.map(r => esc(r.name)).join(', ') + '. Проверь доступ к этим таблицам.</div>' : '') +
-      '<div><div class="sec-h"><h2>Где больше всего</h2><button data-go="checks">Все регионы</button></div><div class="board">' +
-        (top.length ? top.map((r, i) => '<div class="row-bar"><span class="n">' + esc(r.name) + '</span><div class="track"><div class="fill" style="width:' + (r.sum / mx * 100).toFixed(1) + '%;animation-delay:' + i * 80 + 'ms"></div></div><span class="v num">' + money(r.sum) + ' ₴</span></div>').join('')
-          : '<div class="empty">За 7 дней неоплаченных чеков нет</div>') +
-      '</div></div>' +
       '<div><div class="sec-h"><h2>Модули</h2></div><div class="mods">' +
         '<button class="mod" data-go="checks">' + (count ? '<span class="badge num">' + count + '</span>' : '') +
           '<span class="ic" style="color:var(--orchid)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>' +
@@ -545,7 +515,14 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
       '<div><div class="sec-h"><h2>Последние запуски</h2><button data-go="history">История</button></div><div class="list">' + histItems(3) + '</div></div>' +
       '<div class="note" style="text-align:center">Версия ' + APP_VERSION + '</div>' +
       '</div>';
-    countUp($('#hero-sum'), total);
+  }
+
+  // Главная: только состояние (пакеты, история) — без чтения таблиц
+  async function loadHome() {
+    state.loading.home = true; renderHome();
+    try { const d = await api('state', {}); applyState(d); saveLocal(); }
+    catch (e) { toast('Не удалось обновить: ' + e.message); }
+    finally { state.loading.home = false; renderAll(); }
   }
 
   // Сколько файлов SOS ждут отправки — бейдж на модуле
@@ -1461,7 +1438,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
     const r = e.target.closest('[data-retry]'); if (r) { r.dataset.retry === 'sos' ? loadSos(true) : r.dataset.retry === 'an' ? loadAn(true) : r.dataset.retry === 'tt' ? (T.region ? loadTtRegion(T.region) : loadTtOverview()) : r.dataset.retry === 'pc' ? loadPc() : loadSummary(r.dataset.retry, true); return; }
     const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
   });
-  $('#refresh').addEventListener('click', () => { if (!state.loading.week) { haptic(); loadSummary('week', true); } });
+  $('#refresh').addEventListener('click', () => { if (!state.loading.home) { haptic(); loadHome(); } });
 
   let tt;
   function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
@@ -1470,7 +1447,7 @@ button:focus-visible{outline:2px solid var(--orchid);outline-offset:2px}
   renderAll();
   if (tg && tg.initData) {
     // Сервер при первом чтении кэширует все периоды — второй запрос уже мгновенный.
-    loadSummary('week').then(() => { if (state.period !== 'week') loadSummary(state.period); });
+    loadHome();
     // Заранее: список регионов ТТ — чтобы «ТТ и операторы» открывался сразу
     setTimeout(() => { if (!T.overview || current !== 'tt') loadTtOverview(); }, 1500);
   }
